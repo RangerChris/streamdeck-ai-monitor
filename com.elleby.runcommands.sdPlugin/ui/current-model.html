@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+	<head lang="en">
+		<title>Current Model Settings</title>
+		<meta charset="utf-8" />
+		<script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+	</head>
+
+	<body>
+		<sdpi-item label="Context Window (tokens)">
+			<sdpi-textfield setting="contextWindowTokens" placeholder="e.g. 1048576"></sdpi-textfield>
+		</sdpi-item>
+		<sdpi-item label="Note">
+			<p style="font-size: 10px; margin-top: 8px">Empty (recommended) = the harness's own context budget (CLAUDE_CODE_MAX_CONTEXT_TOKENS), falling back to ollama.com's model registry, then a built-in table. Fills the ring with the active session's context usage; goes idle after 2 quiet hours.</p>
+		</sdpi-item>
+	</body>
+</html>

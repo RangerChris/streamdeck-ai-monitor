@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+	<head lang="en">
+		<title>Ollama Balance Settings</title>
+		<meta charset="utf-8" />
+		<script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+	</head>
+
+	<body>
+		<sdpi-item label="Warn At">
+			<sdpi-range setting="warnPercent" min="10" max="95" step="5" showvalue></sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="Low At">
+			<sdpi-range setting="lowPercent" min="20" max="100" step="5" showvalue></sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="API Key">
+			<p style="font-size: 10px; margin-top: 8px">Set with <code>setx OLLAMA_API_KEY "your-key"</code> (create at ollama.com/settings/keys), then restart the Stream Deck app. The key is never stored here or logged.</p>
+		</sdpi-item>
+	</body>
+</html>

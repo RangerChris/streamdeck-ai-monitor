@@ -1,0 +1,108 @@
+{
+	"Name": "AI Monitor",
+	"Version": "0.3.0.0",
+	"Author": "Kresten Elleby",
+	"Actions": [
+		{
+			"Name": "Ollama Balance",
+			"UUID": "com.elleby.runcommands.ollama.balance",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Shows your Ollama credit balance as a live ring gauge; press to refresh.",
+			"PropertyInspectorPath": "ui/ollama-balance.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Claude Tokens Today",
+			"UUID": "com.elleby.runcommands.claude.usage",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Shows local Claude Code token usage for today, and its share of the rolling week.",
+			"PropertyInspectorPath": "ui/claude-usage.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Live Claude Sessions",
+			"UUID": "com.elleby.runcommands.claude.sessions",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Counts busy and live Claude Code sessions on this machine; press to refresh.",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Current Model",
+			"UUID": "com.elleby.runcommands.claude.model",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Shows the most recently active Claude Code session's model and how full its context window is.",
+			"PropertyInspectorPath": "ui/current-model.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Ollama Usage Info Bar",
+			"UUID": "com.elleby.runcommands.ollama.infobar",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Shows your Ollama session and weekly usage as live progress bars on the Stream Deck Neo info bar.",
+			"Controllers": [
+				"Neo"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key"
+				}
+			]
+		}
+	],
+	"Category": "AI Monitor",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Monitor AI usage: Ollama balance, Claude tokens, live sessions, and context fill.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.6"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "24",
+		"Debug": "enabled"
+	},
+	"UUID": "com.elleby.runcommands"
+}
