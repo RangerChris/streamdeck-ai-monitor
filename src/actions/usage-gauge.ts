@@ -17,7 +17,7 @@ const circumference = 2 * Math.PI * radius;
  * @param text The raw text.
  * @returns The XML-safe text.
  */
-function escapeXml(text: string): string {
+export function escapeXml(text: string): string {
 	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 

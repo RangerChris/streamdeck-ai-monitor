@@ -6,7 +6,7 @@ import path from "node:path";
 import url from "node:url";
 
 const isWatching = !!process.env.ROLLUP_WATCH;
-const sdPlugin = "com.elleby.runcommands.sdPlugin";
+const sdPlugin = "com.segment7.aimonitor.sdPlugin";
 
 /**
  * @type {import('rollup').RollupOptions}

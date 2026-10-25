@@ -28,7 +28,7 @@ export type OllamaBalance =
  * @param apiKey The API key.
  * @returns The parsed body.
  */
-async function getJson(path: string, apiKey: string): Promise<any> {
+export async function getJson(path: string, apiKey: string): Promise<any> {
 	const response = await fetch(`${baseUrl}${path}`, {
 		headers: { Authorization: `Bearer ${apiKey}` },
 	});

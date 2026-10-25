@@ -1,7 +1,7 @@
 # Generates the RunCommand plugin icons (terminal prompt glyph on a rounded card).
 # Run from the repo root:  powershell -File tools\make-icons.ps1
 param(
-	[string]$ImgDir = "$PSScriptRoot\..\com.elleby.runcommands.sdPlugin\imgs"
+	[string]$ImgDir = "$PSScriptRoot\..\com.segment7.aimonitor.sdPlugin\imgs"
 )
 
 Add-Type -AssemblyName System.Drawing

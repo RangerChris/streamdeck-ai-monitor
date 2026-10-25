@@ -5,7 +5,7 @@
 	"Actions": [
 		{
 			"Name": "Ollama Balance",
-			"UUID": "com.elleby.runcommands.ollama.balance",
+			"UUID": "com.segment7.aimonitor.ollama.balance",
 			"Icon": "imgs/actions/run-command/icon",
 			"Tooltip": "Shows your Ollama credit balance as a live ring gauge; press to refresh.",
 			"PropertyInspectorPath": "ui/ollama-balance.html",
@@ -21,7 +21,7 @@
 		},
 		{
 			"Name": "Claude Tokens Today",
-			"UUID": "com.elleby.runcommands.claude.usage",
+			"UUID": "com.segment7.aimonitor.claude.usage",
 			"Icon": "imgs/actions/run-command/icon",
 			"Tooltip": "Shows local Claude Code token usage for today, and its share of the rolling week.",
 			"PropertyInspectorPath": "ui/claude-usage.html",
@@ -37,7 +37,7 @@
 		},
 		{
 			"Name": "Live Claude Sessions",
-			"UUID": "com.elleby.runcommands.claude.sessions",
+			"UUID": "com.segment7.aimonitor.claude.sessions",
 			"Icon": "imgs/actions/run-command/icon",
 			"Tooltip": "Counts busy and live Claude Code sessions on this machine; press to refresh.",
 			"Controllers": [
@@ -52,7 +52,7 @@
 		},
 		{
 			"Name": "Current Model",
-			"UUID": "com.elleby.runcommands.claude.model",
+			"UUID": "com.segment7.aimonitor.claude.model",
 			"Icon": "imgs/actions/run-command/icon",
 			"Tooltip": "Shows the most recently active Claude Code session's model and how full its context window is.",
 			"PropertyInspectorPath": "ui/current-model.html",
@@ -67,8 +67,24 @@
 			]
 		},
 		{
+			"Name": "Tree",
+			"UUID": "com.segment7.aimonitor.grove",
+			"Icon": "imgs/actions/run-command/icon",
+			"Tooltip": "Plants a tree on this key that grows as you burn AI tokens; press to pick it as the recipient.",
+			"PropertyInspectorPath": "ui/grove.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/run-command/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
 			"Name": "Ollama Usage Info Bar",
-			"UUID": "com.elleby.runcommands.ollama.infobar",
+			"UUID": "com.segment7.aimonitor.ollama.infobar",
 			"Icon": "imgs/actions/run-command/icon",
 			"Tooltip": "Shows your Ollama session and weekly usage as live progress bars on the Stream Deck Neo info bar.",
 			"Controllers": [
@@ -104,5 +120,5 @@
 		"Version": "24",
 		"Debug": "enabled"
 	},
-	"UUID": "com.elleby.runcommands"
+	"UUID": "com.segment7.aimonitor"
 }

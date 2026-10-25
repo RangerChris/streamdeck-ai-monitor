@@ -13,7 +13,7 @@ import { gaugeColor, gaugeSvg } from "./usage-gauge";
 
 export class OllamaBalanceAction extends PollingAction<OllamaBalanceSettings> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
-	override readonly manifestId = "com.elleby.runcommands.ollama.balance";
+	override readonly manifestId = "com.segment7.aimonitor.ollama.balance";
 
 	/**
 	 * 5 min cadence: usage numbers move slowly, and the API's 10 req/min budget is then spent on nothing.

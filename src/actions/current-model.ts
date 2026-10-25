@@ -24,7 +24,7 @@ let harnessBudget: Promise<number | undefined> | undefined;
  */
 export class CurrentModel extends PollingAction<CurrentModelSettings> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
-	override readonly manifestId = "com.elleby.runcommands.claude.model";
+	override readonly manifestId = "com.segment7.aimonitor.claude.model";
 
 	protected override get pollMs(): number {
 		// Same brisk cadence as the live-sessions key; plain file reads.

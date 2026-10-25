@@ -2,6 +2,7 @@ import streamDeck from "@elgato/streamdeck";
 
 import { ClaudeUsage } from "./actions/claude-usage";
 import { CurrentModel } from "./actions/current-model";
+import { GroveAction } from "./actions/grove-action";
 import { LiveSessions } from "./actions/live-sessions-action";
 import { OllamaBalanceAction } from "./actions/ollama-balance";
 import { OllamaInfobar } from "./actions/ollama-infobar";
@@ -15,6 +16,7 @@ streamDeck.actions.registerAction(new OllamaInfobar());
 streamDeck.actions.registerAction(new ClaudeUsage());
 streamDeck.actions.registerAction(new LiveSessions());
 streamDeck.actions.registerAction(new CurrentModel());
+streamDeck.actions.registerAction(new GroveAction());
 
 // Finally, connect to the Stream Deck.
 streamDeck.connect();

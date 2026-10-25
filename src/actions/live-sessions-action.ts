@@ -15,7 +15,7 @@ const registryPollMs = 60_000;
  */
 export class LiveSessions extends PollingAction<Record<string, never>> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
-	override readonly manifestId = "com.elleby.runcommands.claude.sessions";
+	override readonly manifestId = "com.segment7.aimonitor.claude.sessions";
 
 	protected override get pollMs(): number {
 		return registryPollMs;

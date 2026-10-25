@@ -16,7 +16,7 @@ const transcriptPollMs = 300_000;
  */
 export class ClaudeUsage extends PollingAction<Record<string, never>> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
-	override readonly manifestId = "com.elleby.runcommands.claude.usage";
+	override readonly manifestId = "com.segment7.aimonitor.claude.usage";
 
 	protected override get pollMs(): number {
 		return transcriptPollMs;
