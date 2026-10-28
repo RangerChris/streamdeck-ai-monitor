@@ -52,7 +52,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	bonsai: {
 		id: "bonsai",
 		name: "Bonsai",
-		costTokens: 50_000,
+		costTokens: 1_000_000,
 		heightRatio: 0.45,
 		branchFactor: [2, 3, 2, 2],
 		maxDepth: 4,
@@ -66,7 +66,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	cherry: {
 		id: "cherry",
 		name: "Cherry",
-		costTokens: 200_000,
+		costTokens: 5_000_000,
 		heightRatio: 0.72,
 		branchFactor: [2, 3, 3, 2],
 		maxDepth: 4,
@@ -79,7 +79,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	birch: {
 		id: "birch",
 		name: "Birch",
-		costTokens: 1_000_000,
+		costTokens: 10_000_000,
 		heightRatio: 0.78,
 		branchFactor: [2, 2, 3, 2],
 		maxDepth: 4,
@@ -92,7 +92,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	oak: {
 		id: "oak",
 		name: "Oak",
-		costTokens: 5_000_000,
+		costTokens: 20_000_000,
 		heightRatio: 0.78,
 		branchFactor: [2, 3, 3, 2],
 		maxDepth: 4,
@@ -105,7 +105,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	redwood: {
 		id: "redwood",
 		name: "Redwood",
-		costTokens: 20_000_000,
+		costTokens: 25_000_000,
 		heightRatio: 0.82,
 		branchFactor: [2, 2, 2, 3],
 		maxDepth: 5,
