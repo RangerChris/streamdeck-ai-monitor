@@ -6,7 +6,9 @@ import {
 	growthFraction,
 	groveFromGlobalSettings,
 	pickRecipient,
+	resetTree,
 	syncKeyTree,
+	customPalette,
 	plantTree,
 	removeTree,
 	resolveSpecies,
@@ -239,6 +241,59 @@ describe("syncKeyTree", () => {
 		expect(result.changed).toBe(true);
 		expect(result.state.trees["a"]).toMatchObject({ tokens: 50_000 });
 		expect(result.state.trees["a"]?.custom).toEqual({ trunk: "#8b5a2b", canopy: "#c9a227", costTokens: 100_000 });
+	});
+});
+
+describe("resetTree", () => {
+	it("regrow keeps the tree's shape and zeroes the tokens", () => {
+		const state = { ...stateWith(["a", { species: "oak", tokens: 3_000_000 }]), activeTreeId: "a" };
+		const result = resetTree(state, "a", "regrow", now, mulberry32(9));
+		expect(result.changed).toBe(true);
+		const tree = result.state.trees["a"];
+		expect(tree.tokens).toBe(0);
+		expect(tree.seed).toBe(1); // same shape
+		expect(tree.plantedAt).toBe(now);
+		expect(result.state.activeTreeId).toBe("a");
+	});
+
+	it("replant starts a new shape from zero", () => {
+		const state = stateWith(["a", { species: "oak", tokens: 3_000_000 }]);
+		const result = resetTree(state, "a", "replant", now + 5, mulberry32(2));
+		const tree = result.state.trees["a"];
+		expect(tree.tokens).toBe(0);
+		expect(tree.seed).not.toBe(1);
+		expect(tree.plantedAt).toBe(now + 5);
+	});
+
+	it("replant keeps a custom tree's palette and cost", () => {
+		const custom = { trunk: "#8b5a2b", canopy: "#c9a227", costTokens: 100_000 };
+		const state = { trees: { a: { species: "custom" as const, seed: 1, tokens: 50_000, plantedAt: now, custom } } };
+		const result = resetTree(state, "a", "replant", now, mulberry32(2));
+		expect(result.state.trees["a"].custom).toEqual(custom);
+	});
+
+	it("does nothing on an unplanted key", () => {
+		const state = stateWith(["b", { species: "oak", tokens: 100 }]);
+		const result = resetTree(state, "a", "regrow", now, mulberry32(1));
+		expect(result.changed).toBe(false);
+		expect(result.state).toEqual(state);
+	});
+});
+
+describe("customPalette", () => {
+	it("accepts small custom costs — a 50-token tree is a valid custom tree", () => {
+		const custom = customPalette({ customTrunk: "#8b5a2b", customCanopy: "#c9a227", customCost: "50" });
+		expect(custom.costTokens).toBe(50);
+	});
+
+	it("falls back to the custom default cost for tiny or garbage values", () => {
+		expect(customPalette({ customCost: "0" }).costTokens).toBe(200_000);
+		expect(customPalette({ customCost: "banana" }).costTokens).toBe(200_000);
+	});
+
+	it("keeps the accent only when it is a real hex color", () => {
+		expect(customPalette({ customAccent: "#ffd9e8" }).accent).toBe("#ffd9e8");
+		expect(customPalette({ customAccent: "pink?" }).accent).toBeUndefined();
 	});
 });
 

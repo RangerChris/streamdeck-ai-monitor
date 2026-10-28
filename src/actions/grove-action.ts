@@ -13,7 +13,9 @@ import { soilSvg, tokenBadgeFrames, treeSvg } from "./tree-render";
 import {
 	applyTokenBatch,
 	claudeTokensDelta,
+	customPalette,
 	groveFromGlobalSettings,
+	resetTree,
 	resolveSpecies,
 	syncKeyTree,
 	SPECIES,
@@ -39,6 +41,8 @@ type GroveKeySettings = {
 	customAccent?: string;
 	/** Custom species look from the inspector. */
 	customCost?: number;
+	/** One-shot: the next press zeroes the tree (same shape) and clears the flag. */
+	resetOnPress?: boolean;
 	/** Tokens per manual press, for testing growth without real spend; unset disables it. */
 	testBatch?: number;
 };
@@ -91,6 +95,14 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 		let repaint = state.activeTreeId !== action.id;
 		if (repaint) {
 			state = { ...state, activeTreeId: action.id };
+		}
+		// One-shot reset: the inspector checkbox zeroes the tree (same shape),
+		// then clears itself so the next presses feed growth again.
+		if (settings.resetOnPress === true && tree !== undefined) {
+			state = resetTree(state, action.id, "regrow", Date.now(), mulberry32((Date.now() ^ 0x85ebca6b) >>> 0)).state;
+			tree = state.trees[action.id];
+			repaint = true;
+			await action.setSettings({ ...settings, resetOnPress: false });
 		}
 		// Test feeds arrive as strings ("5000"), and garbage text stays NaN → ignored.
 		const testBatch = Math.floor(Number(settings.testBatch ?? NaN));
@@ -247,21 +259,4 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 	private async saveGrove(state: GroveState): Promise<void> {
 		await streamDeck.settings.setGlobalSettings({ ...(await streamDeck.settings.getGlobalSettings()), grove: state });
 	}
-}
-
-/**
- * Builds the custom palette from inspector settings, falling back per-field so
- * a half-filled palette still renders.
- * @param settings The key's settings.
- */
-function customPalette(settings: GroveKeySettings): CustomPalette {
-	const hex = (value: string | undefined, fallback: string): string => (/^#[0-9a-f]{6}$/i.test(value ?? "") ? (value as string) : fallback);
-	// Textfields hand us strings even for numbers, so parse before trusting.
-	const cost = Number(settings.customCost ?? NaN);
-	return {
-		trunk: hex(settings.customTrunk, SPECIES.custom.palette.trunk),
-		canopy: hex(settings.customCanopy, SPECIES.custom.palette.canopy[0]),
-		accent: hex(settings.customAccent, "") || undefined,
-		costTokens: Number.isFinite(cost) && cost >= 100 ? Math.floor(cost) : SPECIES.custom.costTokens,
-	};
 }

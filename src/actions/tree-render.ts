@@ -107,80 +107,278 @@ function fitToKey(branches: Branch[]): Branch[] {
 	}));
 }
 
+/** Tip position of a branch at its mature length. */
+type Tip = { x: number; y: number };
+
+function tipOf(branch: Branch): Tip {
+	return { x: branch.x0 + Math.cos(branch.angle) * branch.length, y: branch.y0 + Math.sin(branch.angle) * branch.length };
+}
+
+/** Mixes two #rrggbb colors; t=0 returns a, t=1 returns b. Used to derive crown shades without extra palette entries. */
+export function mixHex(a: string, b: string, t: number): string {
+	const chan = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
+	return `#${[1, 3, 5].map((i) => Math.round(chan(a, i) * (1 - t) + chan(b, i) * t).toString(16).padStart(2, "0")).join("")}`;
+}
+
 /**
- * Lays the canopy as one solid mass: the crown envelope is derived from the
- * canopy-bearing tips, then a jittered grid of dark mass blobs inside a crown
- * ellipse fills it — blob size merges them into foliage, and light overlays +
- * accents are kept separate so they can be drawn over the whole mass.
- * @param branches The skeleton to crown (mutated in place).
+ * Lays the canopy per `canopyStyle`; each style owns a generator shape, sharing
+ * only bearer selection and the tip-anchored blob storage. Blobs land at their
+ * absolute crown position but ride the nearest bearer's tip, so foliage appears
+ * as its branch extends.
+ * @param branches The skeleton to crown (mutated in place; the weeper adds twigs).
  * @param species Resolved species profile.
  * @param rng The structure RNG continued from the skeleton build.
  */
 function attachCanopy(branches: Branch[], species: TreeSpecies, rng: () => number): void {
 	// Canopy starts well inside the crown so the mass fills, not just caps the outer
 	// tips. Conifers need foliage up the trunk early or they read as bare red sticks.
-	const crownDepth = species.canopyStyle === "blossom" ? 2 : species.canopyStyle === "conifer" ? species.maxDepth - 3 : species.maxDepth - 2;
+	const crownDepth = species.canopyStyle === "blossom" ? 2 : species.canopyStyle === "conifer" ? 1 : species.maxDepth - 2;
 	const bearers = branches.filter((b) => b.depth >= crownDepth);
 	if (bearers.length === 0) {
 		return;
 	}
+	const tips = bearers.map(tipOf);
+	switch (species.canopyStyle) {
+		case "pad":
+			padCanopy(bearers, tips, species, rng);
+			return;
+		case "weeper":
+			weeperCanopy(branches, bearers, tips, species, rng);
+			return;
+		case "blossom":
+			cloudCanopy(bearers, tips, species, rng, { rAvg: 8, rxFloor: 27, ryFloor: 26, jitter: 0.9, spread: 0.9, shadeMix: 0.35 });
+			return;
+		case "conifer":
+			// Redwood: massive trunk, dense irregular crown — tall and narrow like
+			// the cloud styles, not a Christmas-tree triangle.
+			cloudCanopy(bearers, tips, species, rng, { rAvg: 6.5, rxFloor: 37, ryFloor: 52, jitter: 0.8, spread: 0.88, rxScale: 0.9, topPad: 8, cellScale: 0.95, shadeMix: 0.35 });
+			return;
+		case "broadleaf":
+			cloudCanopy(bearers, tips, species, rng, { rAvg: 7, rxFloor: 34, ryFloor: 24, jitter: 0.8, spread: 0.9, shadeMix: 0.4 });
+			return;
+		default:
+			cloudCanopy(bearers, tips, species, rng, { rAvg: 7, rxFloor: 27, ryFloor: 26, jitter: 0.8, spread: 0.88 });
+	}
+}
 
-	const tipOf = (b: Branch): { x: number; y: number } => ({ x: b.x0 + Math.cos(b.angle) * b.length, y: b.y0 + Math.sin(b.angle) * b.length });
+/** Bounding box of a tip set. */
+function tipsExt(tips: Tip[]): { top: number; bottom: number; left: number; right: number } {
 	let top = Infinity;
 	let bottom = -Infinity;
 	let left = Infinity;
 	let right = -Infinity;
-	for (const bearer of bearers) {
-		const tip = tipOf(bearer);
+	for (const tip of tips) {
 		top = Math.min(top, tip.y);
 		bottom = Math.max(bottom, tip.y);
 		left = Math.min(left, tip.x);
 		right = Math.max(right, tip.x);
 	}
+	return { top, bottom, left, right };
+}
 
-	// Crown envelope: reach beyond the tips and sag downward for mass. The floor
-	// widths keep small-spread species (birch) from skimping on foliage.
-	const conifer = species.canopyStyle === "conifer";
-	const rx = Math.max(conifer ? 18 : 27, ((right - left) / 2) * 1.25 + 5);
-	const ry = Math.max(conifer ? 20 : 26, ((bottom - top) / 2) * 0.9 + 19);
-	const cx = (left + right) / 2;
-	const cy = top + ry;
+/** Pushes a blob whose absolute crown position is (px, py), anchored to the nearest bearer's tip. */
+function anchorBlob(bearers: Branch[], tips: Tip[], px: number, py: number, r: number, color: string, layer: "blobs" | "dabs"): void {
+	let best = 0;
+	let bestD = Infinity;
+	for (let i = 0; i < tips.length; i++) {
+		const d = (tips[i].x - px) ** 2 + (tips[i].y - py) ** 2;
+		if (d < bestD) {
+			bestD = d;
+			best = i;
+		}
+	}
+	bearers[best][layer].push({ dx: px - tips[best].x, dy: py - tips[best].y, r, color });
+}
 
-	const rAvg = conifer ? 4.5 : 7;
-	const cell = rAvg * 1.25;
-	const cols = Math.ceil((rx * 2) / cell);
-	const rows = Math.ceil((ry * 2) / cell);
-	for (let row = 0; row <= rows; row++) {
-		for (let col = 0; col <= cols; col++) {
-			const px = cx - rx + col * cell + (rng() - 0.5) * cell * 0.8;
-			const py = cy - ry + row * cell + (rng() - 0.5) * cell * 0.8;
+/** Tuning for the shared ellipse-grid cloud generator. */
+type CloudConf = {
+	rAvg: number;
+	rxFloor: number;
+	ryFloor: number;
+	/** Grid jitter as a fraction of the cell. */
+	jitter: number;
+	/** How far inside the ellipse blob centers may sit (1 = to the rim). */
+	spread: number;
+	/** Width the crown flares past the bearer tips (rx factor over tip span). */
+	rxScale?: number;
+	/** How far above the topmost tip the crown envelope starts, covering bare leader tips. */
+	topPad?: number;
+	/** Grid cell as a factor of rAvg; tighter packs the blobs denser. */
+	cellScale?: number;
+	/** How strongly the under-shade darkens (0..1). */
+	shadeMix?: number;
+};
+
+/**
+ * The shared crown: a jittered grid of same-color mass blobs inside an envelope
+ * ellipse derived from the canopy-bearing tips. Bridging circles merge the
+ * scalloped silhouette, and a darker under-coat plus light top dabs give depth.
+ */
+function cloudCanopy(bearers: Branch[], tips: Tip[], species: TreeSpecies, rng: () => number, conf: CloudConf): void {
+	const ext = tipsExt(tips);
+	const rx = Math.max(conf.rxFloor, ((ext.right - ext.left) / 2) * (conf.rxScale ?? 1.25) + 5);
+	const ry = Math.max(conf.ryFloor, ((ext.bottom - ext.top) / 2) * 0.9 + 19 + (conf.topPad ?? 0));
+	const cx = (ext.left + ext.right) / 2;
+	const cy = ext.top - (conf.topPad ?? 0) + ry;
+
+	const canopy = species.palette.canopy;
+	const shade = mixHex(canopy[0], "#000000", conf.shadeMix ?? 0.3);
+	const light = canopy[canopy.length - 1];
+	const cell = conf.rAvg * (conf.cellScale ?? 1.25);
+	const placed: { px: number; py: number; r: number }[] = [];
+	for (let row = 0; row <= Math.ceil((ry * 2) / cell); row++) {
+		for (let col = 0; col <= Math.ceil((rx * 2) / cell); col++) {
+			const px = cx - rx + col * cell + (rng() - 0.5) * cell * conf.jitter;
+			const py = cy - ry + row * cell + (rng() - 0.5) * cell * conf.jitter;
 			// Keep centers inside a slightly shrunken ellipse so radii stay in frame.
-			const norm = ((px - cx) / (rx * 0.88)) ** 2 + ((py - cy) / (ry * 0.88)) ** 2;
+			const norm = ((px - cx) / (rx * conf.spread)) ** 2 + ((py - cy) / (ry * conf.spread)) ** 2;
 			if (norm > 1) {
 				continue;
 			}
+			placed.push({ px, py, r: conf.rAvg * (0.85 + rng() * 0.3) });
+		}
+	}
 
-			// Anchor to the nearest bearer's tip so appearance tracks branch growth.
-			let carrier = bearers[0];
-			let bestD = Infinity;
-			for (const bearer of bearers) {
-				const tip = tipOf(bearer);
-				const d = (tip.x - px) ** 2 + (tip.y - py) ** 2;
-				if (d < bestD) {
-					bestD = d;
-					carrier = bearer;
+	// Mass pass first, then bridge circles fuse the silhouette, then the shade coat.
+	for (const p of placed) {
+		anchorBlob(bearers, tips, p.px, p.py, p.r, canopy[0], "blobs");
+	}
+	for (let i = 0; i < placed.length; i++) {
+		for (let j = i + 1; j < placed.length; j++) {
+			const d2 = (placed[i].px - placed[j].px) ** 2 + (placed[i].py - placed[j].py) ** 2;
+			if (d2 < (cell * 1.35) ** 2) {
+				const r = Math.min(placed[i].r, placed[j].r) * 0.8;
+				anchorBlob(bearers, tips, (placed[i].px + placed[j].px) / 2, (placed[i].py + placed[j].py) / 2, r, canopy[0], "blobs");
+			}
+		}
+	}
+	for (const p of placed) {
+		anchorBlob(bearers, tips, p.px + p.r * 0.18, p.py + p.r * 0.32, p.r * 0.8, shade, "blobs");
+	}
+	for (const p of placed) {
+		anchorBlob(bearers, tips, p.px + p.r * 0.28, p.py - p.r * 0.3, p.r * 0.5, light, "dabs");
+		// Accents: blossoms scatter generously, other species drop the odd fruit.
+		if (species.palette.accent !== undefined && rng() < (species.canopyStyle === "blossom" ? 0.45 : 0.18)) {
+			anchorBlob(bearers, tips, p.px + (rng() - 0.5) * p.r, p.py + (rng() - 0.5) * p.r, p.r * 0.42, species.palette.accent, "dabs");
+		}
+	}
+}
+
+/**
+ * Bonsai: each well-separated branch tip carries its own groomed pad — a dense,
+ * flattened puff with a light top edge and shaded underside. Pad-per-tip keeps
+ * them attached to the branch structure instead of hovering as shelves.
+ */
+function padCanopy(bearers: Branch[], tips: Tip[], species: TreeSpecies, rng: () => number): void {
+	const canopy = species.palette.canopy;
+	const shade = mixHex(canopy[0], "#000000", 0.32);
+	const light = canopy[canopy.length - 1];
+	// Pick pads far apart so each stays a distinct groomed cloud, top tiers first.
+	const order = tips.map((tip, i) => i).sort((a, b) => tips[a].y - tips[b].y);
+	const chosen: number[] = [];
+	for (const i of order) {
+		if (chosen.length >= 6) {
+			break;
+		}
+		if (chosen.every((c) => (tips[c].x - tips[i].x) ** 2 + (tips[c].y - tips[i].y) ** 2 >= 169)) {
+			chosen.push(i);
+		}
+	}
+
+	for (const i of chosen) {
+		const tip = tips[i];
+		const rx = 8 + rng() * 6;
+		const ry = 2.4 + rng() * 1.6;
+		const padY = -1 - rng() * 2; // pad rests just above its branch tip
+		for (let px = -rx; px <= rx; px += 2.6) {
+			const half = ry * Math.sqrt(Math.max(0, 1 - (px / (rx * 1.05)) ** 2));
+			if (half <= 0) {
+				continue;
+			}
+			const jx = px + (rng() - 0.5) * 1.5;
+			const jy = padY + (rng() - 0.5) * half * 1.6;
+			const r = 2.7 + rng() * 1.1;
+			if (tip.y + jy + r > groundY - 8) {
+				continue;
+			}
+			anchorBlob(bearers, tips, tip.x + jx, tip.y + jy, r, canopy[0], "blobs");
+		}
+		// Light rim along the top of the pad, shade along its underside.
+		for (let px = -rx * 0.85; px <= rx * 0.85; px += 3.4) {
+			anchorBlob(bearers, tips, tip.x + px, tip.y + padY - ry * 0.7, 1.9 + rng() * 0.7, light, "dabs");
+			anchorBlob(bearers, tips, tip.x + px, tip.y + padY + ry * 0.8, 1.7 + rng() * 0.6, shade, "blobs");
+		}
+		if (species.palette.accent !== undefined && rng() < 0.5) {
+			anchorBlob(bearers, tips, tip.x + (rng() - 0.5) * rx, tip.y + padY + ry, 1.8, species.palette.accent, "dabs");
+		}
+	}
+}
+
+/**
+ * Birch: a slender crown of small leaf clusters climbing the upper trunk, with
+ * fine twigs left to hang from the branches' outer half — the weeping habit.
+ * Twigs are added as real branches so they grow in and droop with the tree.
+ */
+function weeperCanopy(branches: Branch[], bearers: Branch[], tips: Tip[], species: TreeSpecies, rng: () => number): void {
+	const ext = tipsExt(tips);
+	const cx = (ext.left + ext.right) / 2;
+
+	const canopy = species.palette.canopy;
+	const light = canopy[canopy.length - 1];
+
+	// Foliage clings to the branches as airy clumps around the tips — gaps
+	// between the clumps keep the open, wispy birch look instead of a solid lump.
+	for (let i = 0; i < bearers.length; i++) {
+		if (rng() > 0.88) {
+			continue;
+		}
+		const n = 5 + Math.floor(rng() * 4);
+		for (let k = 0; k < n; k++) {
+			const dx = (rng() - 0.5) * 11;
+			const dy = (rng() - 0.5) * 7;
+			const r = 3 + rng() * 1.2;
+			anchorBlob(bearers, tips, tips[i].x + dx, tips[i].y + dy, r, canopy[0], "blobs");
+		}
+		// A light swipe over the top of each clump.
+		anchorBlob(bearers, tips, tips[i].x + (rng() - 0.5) * 6, tips[i].y - rng() * 2, 5.5, light, "dabs");
+	}
+
+	for (let i = 0; i < bearers.length; i++) {
+		const bearer = bearers[i];
+		const tip = tips[i];
+		const count = rng() < 0.7 ? 1 : 2;
+		for (let k = 0; k < count; k++) {
+			// Start partway back along the branch so the twig hangs off its outer half.
+			const back = 0.25 + rng() * 0.4;
+			const sx = tip.x - Math.cos(bearer.angle) * bearer.length * back;
+			const sy = tip.y - Math.sin(bearer.angle) * bearer.length * back;
+			const outward = (tip.x >= cx ? 1 : -1) * 0.05;
+			const angle = Math.PI / 2 + (rng() - 0.5) * 0.3 + outward;
+			const length = Math.min(10 + rng() * 9, groundY - 6 - sy);
+			if (length < 5) {
+				continue;
+			}
+			const twig: Branch = {
+				depth: bearer.depth + 1,
+				x0: sx,
+				y0: sy,
+				angle,
+				length,
+				thickness: 1,
+				birth: Math.min(0.85, bearer.birth + 0.12),
+				blobs: [],
+				dabs: [],
+			};
+			for (const f of [0.5, 0.75, 1]) {
+				const r = 2.6 + rng() * 1.4;
+				const dx = Math.cos(angle) * length * f + (rng() - 0.5) * 1.6;
+				const dy = Math.sin(angle) * length * f + (rng() - 0.5) * 1.2;
+				twig.blobs.push({ dx, dy, r, color: canopy[0] });
+				if (f === 1) {
+					twig.dabs.push({ dx, dy: dy - r * 0.4, r: r * 0.5, color: light });
 				}
 			}
-			const tip = tipOf(carrier);
-			const dx = px - tip.x;
-			const dy = py - tip.y;
-			const r = rAvg * (0.8 + rng() * 0.4);
-			carrier.blobs.push({ dx, dy, r, color: species.palette.canopy[0] });
-			carrier.dabs.push({ dx: dx + r * 0.28, dy: dy - r * 0.3, r: r * 0.5, color: species.palette.canopy[species.palette.canopy.length - 1] });
-			// Accents: blossoms scatter generously, other species drop the odd fruit.
-			if (species.palette.accent !== undefined && rng() < (species.canopyStyle === "blossom" ? 0.45 : 0.18)) {
-				carrier.dabs.push({ dx: dx + (rng() - 0.5) * r, dy: dy + (rng() - 0.5) * r, r: r * 0.42, color: species.palette.accent });
-			}
+			branches.push(twig);
 		}
 	}
 }
@@ -201,7 +399,7 @@ function structure(species: TreeSpecies, seed: number): Branch[] {
 		y0: groundY,
 		angle: -Math.PI / 2 + (rng() - 0.5) * 0.1,
 		length: rootLength,
-		thickness: 4 + species.heightRatio * 3,
+		thickness: (4 + species.heightRatio * 3) * (species.trunkScale ?? 1),
 		birth: 0,
 		blobs: [],
 		dabs: [],
@@ -331,17 +529,18 @@ export function soilSvg(species?: TreeSpecies): string {
  * @param species Resolved species profile.
  * @param seed The tree's shape seed.
  * @param tokens Tokens received so far.
- * @param count Frame count, defaults to 9.
+ * @param options `count` frame count, defaults to 9.
  * @returns One full-frame SVG string per step; the last frame is the plain tree.
  */
-export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: number, count = 9): string[] {
+export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: number, options?: { count?: number }): string[] {
+	const count = options?.count ?? 9;
 	const badge = `${compactTokens(tokens)} / ${compactTokens(species.costTokens)}`;
 	const width = badge.length * 8 + 16;
 	return Array.from({ length: count }, (_, i) => {
 		const opacity = 1 - i / (count - 1);
 		const badgeSvg = i === count - 1 ? "" : [
 			`<rect x="${(72 - width / 2).toFixed(1)}" y="8" width="${width.toFixed(1)}" height="24" rx="6" fill="#000" fill-opacity="${(0.75 * opacity).toFixed(2)}"/>`,
-			`<text x="72" y="20" font-family="monospace" font-size="14" fill="#e6e6e6" fill-opacity="${opacity.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(badge)}</text>`,
+			`<text x="72" y="20" font-family="monospace" font-size="14" fill="#ffffff" fill-opacity="${opacity.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(badge)}</text>`,
 		].join("");
 		// Draw the plain tree, then the badge over it — appending keeps the badge above the background rect.
 		const tree = treeSvg(species, seed, tokens);

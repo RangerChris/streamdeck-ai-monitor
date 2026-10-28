@@ -40,8 +40,10 @@ export type TreeSpecies = {
 	lengthRatio: number;
 	/** Per-depth fixed angle bias, for twisted trunks (bonsai). */
 	curvature: number[];
+	/** Extra trunk girth, for hunched old trunks (bonsai). */
+	trunkScale?: number;
 	/** Canopy style. */
-	canopyStyle: "cluster" | "blossom" | "conifer" | "broadleaf";
+	canopyStyle: "cluster" | "blossom" | "pad" | "weeper" | "conifer" | "broadleaf";
 	palette: TreePalette;
 };
 
@@ -51,14 +53,15 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 		id: "bonsai",
 		name: "Bonsai",
 		costTokens: 50_000,
-		heightRatio: 0.5,
-		branchFactor: [3, 3, 2, 3],
+		heightRatio: 0.45,
+		branchFactor: [2, 3, 2, 2],
 		maxDepth: 4,
 		angleSpread: 58,
 		lengthRatio: 0.62,
-		curvature: [12, -10, 8, -6, 4],
-		canopyStyle: "cluster",
-		palette: { trunk: "#6b4a2f", canopy: ["#4c7a3a", "#5d9448"], accent: "#e08e3c" },
+		curvature: [12, 14, 10, 6, 8],
+		trunkScale: 1.5,
+		canopyStyle: "pad",
+		palette: { trunk: "#6b4a2f", canopy: ["#3c662c", "#4a7c39"], accent: "#e08e3c" },
 	},
 	cherry: {
 		id: "cherry",
@@ -77,27 +80,27 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 		id: "birch",
 		name: "Birch",
 		costTokens: 1_000_000,
-		heightRatio: 0.68,
+		heightRatio: 0.78,
 		branchFactor: [2, 2, 3, 2],
 		maxDepth: 4,
-		angleSpread: 30,
-		lengthRatio: 0.7,
+		angleSpread: 13,
+		lengthRatio: 0.72,
 		curvature: [1, 0, 0, 0, 0],
-		canopyStyle: "cluster",
-		palette: { trunk: "#d9d2c4", canopy: ["#6faa4e", "#86c25f"] },
+		canopyStyle: "weeper",
+		palette: { trunk: "#d9d2c4", canopy: ["#5c8f42", "#6ba64f"] },
 	},
 	oak: {
 		id: "oak",
 		name: "Oak",
 		costTokens: 5_000_000,
 		heightRatio: 0.78,
-		branchFactor: [3, 3, 3, 2],
+		branchFactor: [2, 3, 3, 2],
 		maxDepth: 4,
-		angleSpread: 55,
+		angleSpread: 50,
 		lengthRatio: 0.68,
 		curvature: [6, 4, -3, 2, 0],
 		canopyStyle: "broadleaf",
-		palette: { trunk: "#4d3a29", canopy: ["#3e6b2f", "#4f8439", "#63994a"] },
+		palette: { trunk: "#4d3a29", canopy: ["#2e5223", "#3b662c", "#4a7c34"] },
 	},
 	redwood: {
 		id: "redwood",
@@ -106,11 +109,12 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 		heightRatio: 0.82,
 		branchFactor: [2, 2, 2, 3],
 		maxDepth: 5,
-		angleSpread: 22,
-		lengthRatio: 0.74,
+		angleSpread: 16,
+		lengthRatio: 0.6,
 		curvature: [2, 1, 0, 0, 0, 0],
+		trunkScale: 1.3,
 		canopyStyle: "conifer",
-		palette: { trunk: "#7a3020", canopy: ["#2e5a3c", "#3a6b48"] },
+		palette: { trunk: "#7a3020", canopy: ["#24462c", "#2f5738"] },
 	},
 	// Base profile for user-defined trees; the custom palette and cost are merged over it.
 	custom: {
@@ -124,7 +128,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 		lengthRatio: 0.68,
 		curvature: [5, 3, -2, 2, 0],
 		canopyStyle: "cluster",
-		palette: { trunk: "#6b4a2f", canopy: ["#5a9e4f"] },
+		palette: { trunk: "#6b4a2f", canopy: ["#4a8540"] },
 	},
 };
 
@@ -137,6 +141,33 @@ export type GroveTree = {
 	/** Palette + cost override when species is "custom". */
 	custom?: CustomPalette;
 };
+
+/** The inspector's custom-tree fields in raw Stream Deck form. */
+export type CustomTreeSettings = {
+	customTrunk?: string;
+	customCanopy?: string;
+	customAccent?: string;
+	/** Max tokens to full growth; textfields hand over strings. */
+	customCost?: string | number;
+};
+
+/**
+ * Builds the custom palette from inspector settings, falling back per-field so
+ * a half-filled palette still renders. Costs below 100 are fine — a 50-token
+ * sprout tree is a perfectly respectable custom tree.
+ * @param settings The key's settings, raw from the inspector.
+ */
+export function customPalette(settings: CustomTreeSettings): CustomPalette {
+	const hex = (value: string | undefined, fallback: string): string => (/^#[0-9a-f]{6}$/i.test(value ?? "") ? (value as string) : fallback);
+	// Textfields hand us strings even for numbers, so parse before trusting.
+	const cost = Number(settings.customCost ?? NaN);
+	return {
+		trunk: hex(settings.customTrunk, SPECIES.custom.palette.trunk),
+		canopy: hex(settings.customCanopy, SPECIES.custom.palette.canopy[0]),
+		accent: hex(settings.customAccent, "") || undefined,
+		costTokens: Number.isFinite(cost) && cost >= 1 ? Math.floor(cost) : SPECIES.custom.costTokens,
+	};
+}
 
 /** Claude feed baseline: today's local date and the last-seen tokensToday. */
 export type ClaudeFeedState = { date: string; tokens: number };
@@ -290,6 +321,30 @@ export function removeTree(state: GroveState, actionId: string): GroveState {
 	delete trees[actionId];
 	const activeTreeId = state.activeTreeId === actionId ? undefined : state.activeTreeId;
 	return { ...state, trees, activeTreeId };
+}
+
+/** What the inspector's reset selector can do to a planted tree. */
+export type ResetMode = "regrow" | "replant";
+
+/**
+ * Resets a planted tree's growth: "regrow" keeps the same shape at zero tokens,
+ * "replant" starts over with a fresh shape. Custom palettes and costs survive.
+ * @param state Current grove.
+ * @param actionId The button whose tree to reset.
+ * @param mode Which reset the inspector asked for.
+ * @param now Reset time, epoch ms, recorded as the (re)planting time.
+ * @param rng Source of the shape seed for a replant.
+ * @returns The new grove and whether the button needs a redraw.
+ */
+export function resetTree(state: GroveState, actionId: string, mode: ResetMode, now: number, rng: () => number): { state: GroveState; changed: boolean } {
+	const tree = state.trees[actionId];
+	if (tree === undefined) {
+		return { state, changed: false };
+	}
+	if (mode === "replant") {
+		return { state: plantTree(state, actionId, tree.species, now, rng, tree.custom), changed: true };
+	}
+	return { state: { ...state, trees: { ...state.trees, [actionId]: { ...tree, tokens: 0 } } }, changed: true };
 }
 
 /**

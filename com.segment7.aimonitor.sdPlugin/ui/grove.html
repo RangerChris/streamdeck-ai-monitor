@@ -7,14 +7,14 @@
 	</head>
 
 	<body>
-		<sdpi-item label="Species">
+		<sdpi-item label="Tree type">
 			<sdpi-select setting="species">
 				<option value="">— plant me —</option>
-				<option value="bonsai">Bonsai (50k)</option>
-				<option value="cherry">Cherry (200k)</option>
-				<option value="birch">Birch (1M)</option>
-				<option value="oak">Oak (5M)</option>
-				<option value="redwood">Redwood (20M)</option>
+				<option value="bonsai">Bonsai</option>
+				<option value="cherry">Cherry</option>
+				<option value="birch">Birch</option>
+				<option value="oak">Oak</option>
+				<option value="redwood">Redwood</option>
 				<option value="custom">Custom</option>
 			</sdpi-select>
 		</sdpi-item>
@@ -27,20 +27,18 @@
 		<sdpi-item label="Accent">
 			<sdpi-color setting="customAccent" showalpha="false"></sdpi-color>
 		</sdpi-item>
-		<sdpi-item label="Grows at (tokens)">
+		<sdpi-item label="Custom max tokens">
 			<sdpi-textfield setting="customCost" placeholder="200000"></sdpi-textfield>
 		</sdpi-item>
-		<sdpi-item label="Test feed">
+		<sdpi-item label="Reset next press">
+			<sdpi-checkbox setting="resetOnPress"></sdpi-checkbox>
+		</sdpi-item>
+		<sdpi-item label="Test tokens">
 			<sdpi-textfield setting="testBatch" placeholder="off"></sdpi-textfield>
 		</sdpi-item>
-		<sdpi-item label="How it grows">
+		<sdpi-item label="Notes">
 			<p style="font-size: 10px; margin-top: 8px">
-				Tokens you burn feed the <b>last pressed</b> tree until it's full grown, then a random young one. Claude transcript tokens count all machines' local files; Ollama cloud usage joins in when <code>OLLAMA_API_KEY</code> is set. Changing species replants from seed.
-			</p>
-		</sdpi-item>
-		<sdpi-item label="Testing">
-			<p style="font-size: 10px; margin-top: 8px">
-				Set <b>Test feed</b> to e.g. <code>20000</code> and press the key to pour tokens in manually — no real tokens spent. Clear it when you're done.
+				Press the key to mark it as the grower. With <b>Test tokens</b> set, a press also adds that many tokens. Colors and <b>Custom max tokens</b> apply to <b>Custom</b>.
 			</p>
 		</sdpi-item>
 	</body>
