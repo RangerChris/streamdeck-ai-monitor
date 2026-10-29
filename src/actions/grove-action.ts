@@ -47,8 +47,8 @@ type GroveKeySettings = {
 	testBatch?: number;
 };
 
-/** Milliseconds between feed scans; file reads plus one usage API call, so it can stay brisk. */
-const feedPollMs = 2 * 60_000;
+/** Milliseconds between feed scans; file reads plus one usage API call. */
+const feedPollMs = 60_000;
 
 export class GroveAction extends PollingAction<GroveKeySettings> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
@@ -84,7 +84,7 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 		}
 
 		// No feed scan here: pressing spams the shared 10 req/min Ollama budget,
-		// and the 2 min poll keeps the badge numbers fresh enough.
+		// and the 1 min poll keeps the badge numbers fresh enough.
 		const settings = await action.getSettings();
 		let state = await this.loadGrove();
 		let tree = state.trees[action.id];

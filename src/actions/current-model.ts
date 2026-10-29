@@ -13,6 +13,9 @@ import { gaugeColor, gaugeSvg } from "./usage-gauge";
 /** Minutes of transcript silence before the key shows "idle". */
 const idleMs = 2 * 60 * 60 * 1000;
 
+/** No connection to a session — 0 fill, "0" in the middle. */
+const disconnectedSvg = gaugeSvg(0, "0", "#555555");
+
 /** Bytes read from the tail of the newest transcript — plenty for the last assistant record. */
 const tailBytes = 256 * 1024;
 
@@ -34,13 +37,13 @@ export class CurrentModel extends PollingAction<CurrentModelSettings> {
 	protected override async refresh(action: KeyAction<CurrentModelSettings>): Promise<void> {
 		const latest = await latestTranscript(join(homedir(), ".claude"));
 		if (latest === undefined || Date.now() - (await stat(latest)).mtimeMs > idleMs) {
-			await action.setImage(svgDataUri(gaugeSvg(0, "idle", "#555555")));
+			await action.setImage(disconnectedSvg);
 			return;
 		}
 
 		const summary = await tailSummary(latest);
 		if (summary === undefined) {
-			await action.setImage(svgDataUri(gaugeSvg(0, "idle", "#555555")));
+			await action.setImage(disconnectedSvg);
 			return;
 		}
 

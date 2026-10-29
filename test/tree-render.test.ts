@@ -223,7 +223,8 @@ describe("tokenBadgeFrames", () => {
 	it("centers the text in the pill by explicit baseline, not font metrics", () => {
 		const frame = tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)[0];
 		expect(frame).toContain('dominant-baseline="central"');
-		expect(frame).toMatch(/y="20" font-family/);
+		// Pill y=7, height=27 → its center is 20.5.
+		expect(frame).toMatch(/y="20\.5" font-family/);
 	});
 
 	it("is deterministic for the same inputs", () => {

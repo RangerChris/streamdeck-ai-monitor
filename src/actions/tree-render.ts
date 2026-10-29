@@ -535,12 +535,12 @@ export function soilSvg(species?: TreeSpecies): string {
 export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: number, options?: { count?: number }): string[] {
 	const count = options?.count ?? 9;
 	const badge = `${compactTokens(tokens)} / ${compactTokens(species.costTokens)}`;
-	const width = badge.length * 8 + 16;
+	const width = badge.length * 10 + 20;
 	return Array.from({ length: count }, (_, i) => {
 		const opacity = 1 - i / (count - 1);
 		const badgeSvg = i === count - 1 ? "" : [
-			`<rect x="${(72 - width / 2).toFixed(1)}" y="8" width="${width.toFixed(1)}" height="24" rx="6" fill="#000" fill-opacity="${(0.75 * opacity).toFixed(2)}"/>`,
-			`<text x="72" y="20" font-family="monospace" font-size="14" fill="#ffffff" fill-opacity="${opacity.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(badge)}</text>`,
+			`<rect x="${(72 - width / 2).toFixed(1)}" y="7" width="${width.toFixed(1)}" height="27" rx="7" fill="#000" fill-opacity="${(0.75 * opacity).toFixed(2)}"/>`,
+			`<text x="72" y="20.5" font-family="monospace" font-size="17" fill="#ffffff" fill-opacity="${opacity.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(badge)}</text>`,
 		].join("");
 		// Draw the plain tree, then the badge over it — appending keeps the badge above the background rect.
 		const tree = treeSvg(species, seed, tokens);

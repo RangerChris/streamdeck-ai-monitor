@@ -1,11 +1,10 @@
 import { NeoInfobarAction, SingletonAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import streamDeck from "@elgato/streamdeck";
 
-import { getBalance, OllamaApiError, OllamaBalance } from "./ollama-api";
+import { balanceStore } from "./ollama-balance-store";
 import { gaugeColor } from "./usage-gauge";
 
-/** How often the info bar polls, in ms; 2 min keeps it far inside the API's 10 req/min budget. */
-const pollMs = 2 * 60_000;
+/** Timer cadence; the shared store keeps all Ollama keys at one API request per minute. */
+const pollMs = 60_000;
 
 /** Settings are not needed for the info bar. */
 type InfobarSettings = Record<string, never>;
@@ -19,9 +18,6 @@ export class OllamaInfobar extends SingletonAction<InfobarSettings> {
 	override readonly manifestId = "com.segment7.aimonitor.ollama.infobar";
 
 	private timer: ReturnType<typeof setInterval> | undefined;
-
-	/** When we may hit the API again after a 429. */
-	private nextAttemptAt = 0;
 
 	/**
 	 * Assigns the layout, refreshes, and arms the poll timer.
@@ -51,31 +47,21 @@ export class OllamaInfobar extends SingletonAction<InfobarSettings> {
 	 * @param bar The infobar action to update.
 	 */
 	private async refresh(bar: NeoInfobarAction<InfobarSettings>): Promise<void> {
-		const apiKey = process.env.OLLAMA_API_KEY;
-		if (!apiKey) {
+		const reading = await balanceStore.get();
+
+		if (reading.status === "nokey") {
 			await bar.setFeedback({ sLabel: "no key", wLabel: "OLLAMA_API_KEY" });
 			return;
 		}
-		if (Date.now() < this.nextAttemptAt) {
-			return; // Backing off after a 429 — the last bars stay on screen.
+		if (reading.status === "badkey") {
+			await bar.setFeedback({ sLabel: "bad key", wLabel: "ollama.com/settings/keys" });
+			return;
+		}
+		if (reading.status === "keep") {
+			return; // Backing off from a 429 or a transient error — the last bars stay on screen.
 		}
 
-		try {
-			const balance = await getBalance(apiKey);
-			this.nextAttemptAt = 0;
-			await bar.setFeedback(balanceToFeedback(balance));
-		} catch (error) {
-			if (error instanceof OllamaApiError) {
-				if (error.retryAfterSeconds !== undefined) {
-					this.nextAttemptAt = Date.now() + error.retryAfterSeconds * 1000;
-				}
-				await bar.setFeedback({ sLabel: error.status === 401 ? "bad key" : `err ${error.status}`, wLabel: "ollama.com" });
-				streamDeck.logger.warn("OllamaInfobar: API error", error.status, error.retryAfterSeconds);
-			} else {
-				await bar.setFeedback({ sLabel: "offline", wLabel: "network" });
-				streamDeck.logger.warn("OllamaInfobar: refresh failed", String(error));
-			}
-		}
+		await bar.setFeedback(balanceToFeedback(reading.balance));
 	}
 }
 
