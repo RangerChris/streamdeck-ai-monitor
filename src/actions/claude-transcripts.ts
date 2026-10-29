@@ -96,64 +96,6 @@ export function lastAssistantSummary(content: string): { model: string; contextT
 }
 
 /**
- * Groups input+output token usage by model.
- * @param content The raw JSONL content.
- * @param sinceMs Optional epoch-ms cutoff; only records at or after it are counted.
- * @returns Model name to token totals, in first-seen order.
- */
-export function tokensByModel(content: string, sinceMs?: number): Map<string, number> {
-	const totals = new Map<string, number>();
-
-	for (const line of content.split(/\r?\n/)) {
-		if (line.trim() === "") {
-			continue;
-		}
-		try {
-			const record: any = JSON.parse(line);
-			const usage = record.type === "assistant" ? record.message?.usage : undefined;
-			const model = record.message?.model;
-			if (usage === undefined || typeof model !== "string") {
-				continue;
-			}
-			if (sinceMs !== undefined) {
-				if (typeof record.timestamp !== "string" || Date.parse(record.timestamp) < sinceMs) {
-					continue;
-				}
-			}
-			totals.set(model, (totals.get(model) ?? 0) + (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0));
-		} catch {
-			// Garbage lines (partial writes, embedded noise) shouldn't sink the whole scan.
-		}
-	}
-
-	return totals;
-}
-
-/**
- * Aggregates per-model token usage over today's window from all fresh transcripts, largest first.
- * @param claudeDir The .claude config directory.
- * @param now The reference time; defaults to now.
- * @returns Model name and in+output token totals, sorted descending.
- */
-export async function aggregateByModel(claudeDir: string, now = new Date()): Promise<Array<{ model: string; tokens: number }>> {
-	const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-	const merged = new Map<string, number>();
-
-	for (const path of await listTranscripts(join(claudeDir, "projects"))) {
-		if ((await stat(path)).mtimeMs < todayStart) {
-			continue;
-		}
-		for (const [model, tokens] of tokensByModel(await readFile(path, "utf8"), todayStart)) {
-			merged.set(model, (merged.get(model) ?? 0) + tokens);
-		}
-	}
-
-	return [...merged.entries()]
-		.map(([model, tokens]) => ({ model, tokens }))
-		.sort((a, b) => b.tokens - a.tokens);
-}
-
-/**
  * Finds the most recently modified transcript.
  * @param claudeDir The .claude config directory.
  * @returns Its path, or undefined when there are none.

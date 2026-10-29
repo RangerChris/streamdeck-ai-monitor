@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gaugeSvg, stackedBarSvg, statSvg } from "../src/actions/usage-gauge";
+import { gaugeSvg, statSvg } from "../src/actions/usage-gauge";
 
 describe("gaugeSvg", () => {
 	it("draws the ring arc proportional to usage", () => {
@@ -26,33 +26,6 @@ describe("gaugeSvg", () => {
 		expect(svg).toContain("1.2M");
 		expect(svg).toContain("today");
 		expect(svg).toContain("#e6b45a");
-	});
-});
-
-describe("stackedBarSvg", () => {
-	const segmentPattern = /<rect x="[\d.]+" y="20" width="(\d+(?:\.\d+)?)" height="22" fill="#(?!262626)[0-9a-f]{6}"/g;
-
-	it("sizes segments proportionally to their share and caps at 4", () => {
-		const split = stackedBarSvg([
-			{ model: "glm", tokens: 300 },
-			{ model: "fable", tokens: 100 },
-		]);
-		const splitWidths = [...split.matchAll(segmentPattern)].map((m) => Number(m[1]));
-		expect(splitWidths).toHaveLength(2);
-		expect(splitWidths[1]).toBeCloseTo(splitWidths[0] / 3, 0);
-
-		const capped = stackedBarSvg(Array.from({ length: 8 }, (_, i) => ({ model: `m${i}`, tokens: 10 })));
-		expect([...capped.matchAll(segmentPattern)]).toHaveLength(4);
-	});
-
-	it("renders the leading model and totals", () => {
-		const svg = stackedBarSvg([
-			{ model: "glm-5.3-flash", tokens: 1_250_000 },
-			{ model: "fable", tokens: 60 },
-		]);
-
-		expect(svg).toContain("GLM 5.3");
-		expect(svg).toContain("1.25M");
 	});
 });
 

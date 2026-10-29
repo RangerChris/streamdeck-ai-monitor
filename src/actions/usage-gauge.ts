@@ -1,5 +1,3 @@
-import { compactTokens } from "./claude-transcripts";
-import { shortModelName } from "./context-limits";
 import { successColor } from "./animations";
 
 /** Background matching the static key art. */
@@ -69,38 +67,6 @@ export function gaugeColor(percent: number, warnPercent = 60, lowPercent = 85): 
 	}
 	return successColor;
 }
-/** Segment colors for the stacked model-mix bar. */
-export const segmentPalette = ["#2ea043", "#4e9fe0", "#e6b45a", "#c678dd"];
-
-/**
- * Builds the model-mix view: a stacked bar of today's token shares plus the leading model's name and total.
- * @param models Model usages, largest first (the aggregateByModel output shape).
- * @returns A full-frame SVG string; at most 4 segments are drawn.
- */
-export function stackedBarSvg(models: Array<{ model: string; tokens: number }>): string {
-	const top = models.slice(0, 4);
-	const total = models.reduce((sum, model) => sum + model.tokens, 0) || 1;
-	const barWidth = 120;
-
-	let x = 12;
-	const segments = top.map((entry, i) => {
-		const width = (entry.tokens / total) * barWidth;
-		const rect = `<rect x="${Number(x.toFixed(1))}" y="20" width="${width.toFixed(1)}" height="22" fill="${segmentPalette[i]}"/>`;
-		x += width;
-		return rect;
-	});
-
-	return [
-		`<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">`,
-		`<rect width="144" height="144" fill="${backgroundColor}"/>`,
-		`<rect x="12" y="20" width="${barWidth}" height="22" fill="${trackColor}"/>`,
-		...segments,
-		`<text x="72" y="80" font-family="sans-serif" font-size="26" font-weight="600" fill="#e6e6e6" text-anchor="middle">${shortModelName(top[0].model)}</text>`,
-		`<text x="72" y="104" font-family="sans-serif" font-size="16" fill="#8a8a8a" text-anchor="middle">${compactTokens(top[0].tokens)}</text>`,
-		`</svg>`,
-	].join("");
-}
-
 /**
  * Builds a plain stat tile: big number, caption below, no gauge ring.
  * @param label The big value, e.g. "3".
