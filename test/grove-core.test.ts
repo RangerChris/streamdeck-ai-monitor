@@ -33,10 +33,7 @@ describe("SPECIES catalog", () => {
 		expect(SPECIES.birch.costTokens).toBe(10_000_000);
 		expect(SPECIES.oak.costTokens).toBe(20_000_000);
 		expect(SPECIES.redwood.costTokens).toBe(25_000_000);
-	});
-
-	it("has a custom profile with a sensible default cost", () => {
-		expect(SPECIES.custom.costTokens).toBe(200_000);
+		expect(SPECIES.custom.costTokens).toBe(200_000); // sensible default for the custom profile
 	});
 });
 

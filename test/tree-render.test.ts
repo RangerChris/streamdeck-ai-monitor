@@ -214,10 +214,10 @@ describe("tokenBadgeFrames", () => {
 		}
 	});
 
-	it("paints the badge after the background so the dark rect does not cover it", () => {
-		const badgeAt = tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)[0].indexOf("12k");
-		const backgroundAt = tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)[0].indexOf("#141414");
-		expect(badgeAt).toBeGreaterThan(backgroundAt);
+	it("paints the badge over the background, in white on the dark pill", () => {
+		const frame = tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)[0];
+		expect(frame.indexOf("12k")).toBeGreaterThan(frame.indexOf("#141414"));
+		expect(frame).toContain('fill="#ffffff"');
 	});
 
 	it("centers the text in the pill by explicit baseline, not font metrics", () => {
@@ -229,9 +229,5 @@ describe("tokenBadgeFrames", () => {
 
 	it("is deterministic for the same inputs", () => {
 		expect(tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)).toEqual(tokenBadgeFrames(SPECIES.bonsai, 42, 12_345));
-	});
-
-	it("prints the token total in white over the dark pill", () => {
-		expect(tokenBadgeFrames(SPECIES.bonsai, 42, 12_345)[0]).toContain('fill="#ffffff"');
 	});
 });

@@ -10,30 +10,22 @@ import {
 import { createKeyAnimator } from "../src/actions/key-animator";
 
 describe("spinnerFrames", () => {
-	it("produces the requested number of distinct frames", () => {
+	it("renders N distinct well-formed frames, each at its own rotation", () => {
 		const frames = spinnerFrames(12);
 
 		expect(frames).toHaveLength(12);
 		expect(new Set(frames).size).toBe(12);
-	});
-
-	it("renders a well-formed SVG", () => {
-		const frame = spinnerFrames(1)[0];
-
-		expect(frame).toMatch(/^<svg/);
-		expect(frame).toMatch(/<\/svg>$/);
-	});
-
-	it("places each frame at a different rotation", () => {
-		const frames = spinnerFrames(4);
+		for (const frame of frames) {
+			expect(frame).toMatch(/^<svg/);
+			expect(frame).toMatch(/<\/svg>$/);
+		}
 		const angles = [...frames.join("").matchAll(/rotate\((-?\d+)/g)].map((m) => m[1]);
-
-		expect(new Set(angles).size).toBe(4);
+		expect(new Set(angles).size).toBe(12);
 	});
 });
 
 describe("successFrames", () => {
-	it("renders a burst of well-formed SVG frames", () => {
+	it("renders an outward-growing burst in the success color", () => {
 		const frames = successFrames();
 
 		expect(frames.length).toBeGreaterThan(0);
@@ -41,22 +33,14 @@ describe("successFrames", () => {
 			expect(frame).toMatch(/^<svg/);
 			expect(frame).toMatch(/<\/svg>$/);
 		}
-	});
-
-	it("animates the confirmation ring outward", () => {
-		const frames = successFrames();
 		const radii = [...frames.join("").matchAll(/r="(\d+)"/g)].map((m) => Number(m[1]));
-
 		expect(Math.min(...radii)).toBeLessThan(Math.max(...radii));
-	});
-
-	it("uses the success color", () => {
-		expect(successFrames().join("")).toContain(successColor);
+		expect(frames.join("")).toContain(successColor);
 	});
 });
 
 describe("failureFrames", () => {
-	it("renders a burst of well-formed SVG frames", () => {
+	it("renders a shaking burst in the failure color", () => {
 		const frames = failureFrames();
 
 		expect(frames.length).toBeGreaterThan(0);
@@ -64,18 +48,10 @@ describe("failureFrames", () => {
 			expect(frame).toMatch(/^<svg/);
 			expect(frame).toMatch(/<\/svg>$/);
 		}
-	});
-
-	it("shakes the marker horizontally", () => {
-		const frames = failureFrames();
 		const offsets = [...frames.join("").matchAll(/translate\((-?\d+)/g)].map((m) => Number(m[1]));
-
 		expect(Math.min(...offsets)).toBeLessThan(0);
 		expect(Math.max(...offsets)).toBeGreaterThan(0);
-	});
-
-	it("uses the failure color", () => {
-		expect(failureFrames().join("")).toContain(failureColor);
+		expect(frames.join("")).toContain(failureColor);
 	});
 });
 

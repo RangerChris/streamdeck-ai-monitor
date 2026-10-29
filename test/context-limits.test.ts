@@ -45,8 +45,4 @@ describe("shortModelName", () => {
 		expect(shortModelName("glm-5.3-flash")).toBe("GLM 5.3");
 		expect(shortModelName("claude-haiku-5-5[1m]")).toBe("Haiku 5.5");
 	});
-
-	it("keeps flash variants readable", () => {
-		expect(shortModelName("glm-5.3-flash")).toBe("GLM 5.3");
-	});
 });
