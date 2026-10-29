@@ -6,46 +6,46 @@
 		{
 			"Name": "Ollama Balance",
 			"UUID": "com.segment7.aimonitor.ollama.balance",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Shows your Ollama credit balance as a live ring gauge; press to refresh.",
+			"Icon": "imgs/actions/ollama-balance/icon",
+			"Tooltip": "Your remaining Ollama credit and how much you used.",
 			"PropertyInspectorPath": "ui/ollama-balance.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key",
+					"Image": "imgs/actions/ollama-balance/key",
 					"TitleAlignment": "middle"
 				}
 			]
 		},
 		{
-			"Name": "Claude Tokens Today",
+			"Name": "Live Tokens",
 			"UUID": "com.segment7.aimonitor.claude.usage",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Shows local Claude Code token usage for today, and its share of the rolling week.",
+			"Icon": "imgs/actions/claude-usage/icon",
+			"Tooltip": "AI tokens used with Claude Code today.",
 			"PropertyInspectorPath": "ui/claude-usage.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key",
+					"Image": "imgs/actions/claude-usage/key",
 					"TitleAlignment": "middle"
 				}
 			]
 		},
 		{
-			"Name": "Live Claude Sessions",
+			"Name": "Live Sessions",
 			"UUID": "com.segment7.aimonitor.claude.sessions",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Counts busy and live Claude Code sessions on this machine; press to refresh.",
+			"Icon": "imgs/actions/claude-sessions/icon",
+			"Tooltip": "How many Claude Code sessions are live right now.",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key",
+					"Image": "imgs/actions/claude-sessions/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -53,15 +53,15 @@
 		{
 			"Name": "Current Model",
 			"UUID": "com.segment7.aimonitor.claude.model",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Shows the most recently active Claude Code session's model and how full its context window is.",
+			"Icon": "imgs/actions/claude-model/icon",
+			"Tooltip": "The active Claude Code session's model and context fill.",
 			"PropertyInspectorPath": "ui/current-model.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key",
+					"Image": "imgs/actions/claude-model/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -69,15 +69,15 @@
 		{
 			"Name": "Tree",
 			"UUID": "com.segment7.aimonitor.grove",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Plants a tree on this key that grows as you burn AI tokens; press to pick it as the recipient.",
+			"Icon": "imgs/actions/grove/icon",
+			"Tooltip": "A tree on this key that grows as you burn AI tokens; press to pick it.",
 			"PropertyInspectorPath": "ui/grove.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key",
+					"Image": "imgs/actions/grove/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -85,14 +85,14 @@
 		{
 			"Name": "Ollama Usage Info Bar",
 			"UUID": "com.segment7.aimonitor.ollama.infobar",
-			"Icon": "imgs/actions/run-command/icon",
-			"Tooltip": "Shows your Ollama session and weekly usage as live progress bars on the Stream Deck Neo info bar.",
+			"Icon": "imgs/actions/ollama-infobar/icon",
+			"Tooltip": "Your Ollama session and weekly usage as live bars.",
 			"Controllers": [
 				"Neo"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/run-command/key"
+					"Image": "imgs/actions/ollama-infobar/key"
 				}
 			]
 		}

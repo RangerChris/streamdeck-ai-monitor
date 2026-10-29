@@ -1,4 +1,4 @@
-# Generates the RunCommand plugin icons (terminal prompt glyph on a rounded card).
+﻿# Generates the AI Monitor action icons: one terminal-card icon per action, lettered to its subject.
 # Run from the repo root:  powershell -File tools\make-icons.ps1
 param(
 	[string]$ImgDir = "$PSScriptRoot\..\com.segment7.aimonitor.sdPlugin\imgs"
@@ -7,10 +7,20 @@ param(
 Add-Type -AssemblyName System.Drawing
 
 $bg = [System.Drawing.Color]::FromArgb(255, 32, 32, 36)
-$accent = [System.Drawing.Color]::FromArgb(255, 78, 201, 176) # terminal green/teal
+$accent = [System.Drawing.Color]::FromArgb(255, 240, 240, 240) # white glyphs only
 
-function New-IconPath {
-	param([int]$Size, [string]$Glyph, [float]$GlyphScale, [float]$CornerRadiusRatio = 0.12)
+# One entry per action in the manifest: folder under imgs\actions, glyph, symbol font.
+$icons = @(
+	@{ Name = "ollama-balance"; Glyph = '$'; Font = 'Segoe UI Symbol' }
+	@{ Name = "claude-usage";   Glyph = 'Σ'; Font = 'Segoe UI Symbol' }
+	@{ Name = "claude-sessions"; Glyph = '◉'; Font = 'Segoe UI Symbol' }
+	@{ Name = "claude-model";   Glyph = '✦'; Font = 'Segoe UI Symbol' }
+	@{ Name = "grove";          Glyph = '♣'; Font = 'Segoe UI Symbol' }
+	@{ Name = "ollama-infobar"; Glyph = '≡'; Font = 'Segoe UI Symbol' }
+)
+
+function New-Icon {
+	param([int]$Size, [string]$Glyph, [string]$GlyphFont, [float]$CornerRadiusRatio = 0.12)
 
 	$bmp = New-Object System.Drawing.Bitmap($Size, $Size)
 	$g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -28,9 +38,9 @@ function New-IconPath {
 	$cardBrush = New-Object System.Drawing.SolidBrush $bg
 	$g.FillPath($cardBrush, $path)
 
-	# Prompt glyph, roughly centered with a little optical lift
-	$fontSize = $Size * $GlyphScale
-	$font = New-Object System.Drawing.Font('Consolas', $fontSize, [System.Drawing.FontStyle]::Bold)
+	# Glyph, roughly centered with a little optical lift
+	$fontSize = $Size * 0.75
+	$font = New-Object System.Drawing.Font($GlyphFont, $fontSize, [System.Drawing.FontStyle]::Bold)
 	$brush = New-Object System.Drawing.SolidBrush $accent
 	$glyphSize = $g.MeasureString($Glyph, $font)
 	$g.DrawString($Glyph, $font, $brush, ($Size - $glyphSize.Width) / 2, ($Size - $glyphSize.Height) / 2 - ($Size * 0.02))
@@ -39,16 +49,19 @@ function New-IconPath {
 	return $bmp
 }
 
-# Action icon (shows in the action list), 20px and 40px @2x
-(New-IconPath -Size 20 -Glyph '>_' -GlyphScale 0.42).Save("$ImgDir\actions\run-command\icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
-(New-IconPath -Size 40 -Glyph '>_' -GlyphScale 0.42).Save("$ImgDir\actions\run-command\icon@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
+foreach ($icon in $icons) {
+	$dir = Join-Path $ImgDir "actions\$($icon.Name)"
+	New-Item -ItemType Directory -Force $dir | Out-Null
+	# Action icon (action list), 20px and 40px @2x
+	(New-Icon -Size 20 -Glyph $icon.Glyph -GlyphFont $icon.Font).Save("$dir\icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+	(New-Icon -Size 40 -Glyph $icon.Glyph -GlyphFont $icon.Font).Save("$dir\icon@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
+	# Key image, 72px and 144px @2x
+	(New-Icon -Size 72 -Glyph $icon.Glyph -GlyphFont $icon.Font).Save("$dir\key.png", [System.Drawing.Imaging.ImageFormat]::Png)
+	(New-Icon -Size 144 -Glyph $icon.Glyph -GlyphFont $icon.Font).Save("$dir\key@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
+}
 
-# Key image, 72px and 144px @2x
-(New-IconPath -Size 72 -Glyph '>_' -GlyphScale 0.5).Save("$ImgDir\actions\run-command\key.png", [System.Drawing.Imaging.ImageFormat]::Png)
-(New-IconPath -Size 144 -Glyph '>_' -GlyphScale 0.5).Save("$ImgDir\actions\run-command\key@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
-
-# Plugin / category icons, terminal prompt on dark
-(New-IconPath -Size 56 -Glyph '>_' -GlyphScale 0.5 -CornerRadiusRatio 0.28).Save("$ImgDir\plugin\category-icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
-(New-IconPath -Size 112 -Glyph '>_' -GlyphScale 0.5 -CornerRadiusRatio 0.28).Save("$ImgDir\plugin\category-icon@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
+# Category icon: the monitoring eye
+(New-Icon -Size 56 -Glyph '◉' -GlyphFont 'Segoe UI Symbol' -CornerRadiusRatio 0.28).Save("$ImgDir\plugin\category-icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+(New-Icon -Size 112 -Glyph '◉' -GlyphFont 'Segoe UI Symbol' -CornerRadiusRatio 0.28).Save("$ImgDir\plugin\category-icon@2x.png", [System.Drawing.Imaging.ImageFormat]::Png)
 
 "Icons written to $ImgDir"
