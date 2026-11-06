@@ -1,5 +1,3 @@
-import { randomPick } from "./seeded-rng";
-
 /** Species ids; the five predefined trees plus the user-defined one. */
 export type SpeciesId = "bonsai" | "cherry" | "birch" | "oak" | "redwood" | "custom";
 
@@ -191,11 +189,6 @@ export function growthFraction(tree: GroveTree): number {
 	return Math.min(1, tree.tokens / resolveSpecies(tree).costTokens);
 }
 
-/** Is the tree fully grown? */
-function isMaxed(tree: GroveTree): boolean {
-	return tree.tokens >= resolveSpecies(tree).costTokens;
-}
-
 /**
  * Resolves a tree's render/growth profile — predefined, or the custom profile
  * with the tree's palette and cost merged over it.
@@ -241,50 +234,42 @@ export function claudeTokensDelta(feed: ClaudeFeedState | undefined, tokensToday
 }
 
 /**
- * Which tree receives the next batch: the active one unless it is full grown,
- * else a random non-maxed tree, else nobody.
+ * Routes one token batch as incremental growth: the active tree fills toward
+ * full first, then the leftover spills into the next trees in planting order
+ * until the batch is spent. Anything left over once every tree is full grown
+ * withers — nothing is stored anywhere.
  * @param state Current grove.
- * @param rng Seeded RNG keeps the random pick testable.
- */
-export function pickRecipient(state: GroveState, rng: () => number): string | undefined {
-	const active = state.activeTreeId !== undefined ? state.trees[state.activeTreeId] : undefined;
-	if (active !== undefined && !isMaxed(active)) {
-		return state.activeTreeId;
-	}
-	return randomPick(
-		rng,
-		Object.keys(state.trees).filter((id) => !isMaxed(state.trees[id])),
-	);
-}
-
-/**
- * Routes one atomic token batch per the distribution rules. A tree that maxes
- * out mid-batch keeps the excess — no spilling into the next tree.
- * @param state Current grove.
- * @param delta Tokens in this batch; non-positive batches change nothing.
- * @param rng Seeded RNG for the random fallback.
+ * @param delta Tokens spent since the last bath; non-positive batches change nothing.
  * @returns The new grove and which action keys need a redraw.
  */
-export function applyTokenBatch(state: GroveState, delta: number, rng: () => number): { state: GroveState; changedTreeIds: string[] } {
+export function applyTokenBatch(state: GroveState, delta: number): { state: GroveState; changedTreeIds: string[] } {
 	if (delta <= 0) {
 		return { state, changedTreeIds: [] };
 	}
 
-	const recipient = pickRecipient(state, rng);
-	if (recipient === undefined) {
-		return { state, changedTreeIds: [] }; // All trees full grown — the batch is spent on the wind.
+	// The active tree drinks first; the rest flow in planting order.
+	const rest = Object.keys(state.trees).filter((id) => id !== state.activeTreeId);
+	const order = state.activeTreeId !== undefined && state.activeTreeId in state.trees ? [state.activeTreeId, ...rest] : rest;
+
+	let budget = delta;
+	const trees = { ...state.trees };
+	const changedTreeIds: string[] = [];
+	for (const id of order) {
+		if (budget <= 0) {
+			break;
+		}
+		const tree = state.trees[id];
+		const cost = resolveSpecies(tree).costTokens;
+		if (tree.tokens >= cost) {
+			continue; // Full grown — no room for growth.
+		}
+		const tokens = Math.min(tree.tokens + budget, cost);
+		budget -= tokens - tree.tokens;
+		trees[id] = { ...tree, tokens };
+		changedTreeIds.push(id);
 	}
 
-	const tree = state.trees[recipient];
-	const cost = resolveSpecies(tree).costTokens;
-	const tokens = Math.min(tree.tokens + delta, cost);
-	return {
-		state: {
-			...state,
-			trees: { ...state.trees, [recipient]: { ...tree, tokens } },
-		},
-		changedTreeIds: [recipient],
-	};
+	return changedTreeIds.length === 0 ? { state, changedTreeIds } : { state: { ...state, trees }, changedTreeIds };
 }
 
 /**

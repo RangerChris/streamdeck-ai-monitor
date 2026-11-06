@@ -67,6 +67,13 @@ describe("bucketTokens", () => {
 });
 
 describe("ollamaTokensDelta", () => {
+	it("returns a zero delta on the first poll — a baseline, not a totals dump", () => {
+		const first = ollamaTokensDelta(undefined, usageResponse([{ from: "2026-10-25T19:00:00Z", partial: true, ...metrics(5_000, 300) }]));
+		expect(first.delta).toBe(0);
+		// The totals still land in the baseline so later polls delta against them.
+		expect(first.buckets["2026-10-25T19:00:00Z"]).toBe(5_300);
+	});
+
 	it("counts growth of a partial bucket seen before", () => {
 		const before = usageResponse([{ from: "2026-10-25T19:00:00Z", partial: true, ...metrics(100, 20) }]);
 		const after = usageResponse([{ from: "2026-10-25T19:00:00Z", partial: true, ...metrics(350, 60) }]);

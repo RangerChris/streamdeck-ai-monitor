@@ -5,7 +5,6 @@ import {
 	claudeTokensDelta,
 	growthFraction,
 	groveFromGlobalSettings,
-	pickRecipient,
 	resetTree,
 	syncKeyTree,
 	customPalette,
@@ -76,60 +75,58 @@ describe("claudeTokensDelta", () => {
 	});
 });
 
-describe("pickRecipient", () => {
-	it("prefers the active tree when it is not maxed", () => {
-		const state = { ...stateWith(["a", { species: "bonsai", tokens: 0 }], ["b", { species: "oak", tokens: 0 }]), activeTreeId: "b" };
-		expect(pickRecipient(state, mulberry32(1))).toBe("b");
-	});
-
-	it("falls through to a random non-maxed tree when the active one is full", () => {
-		const state = { ...stateWith(["a", { species: "bonsai", tokens: 1_000_000 }], ["b", { species: "oak", tokens: 0 }]), activeTreeId: "a" };
-		expect(pickRecipient(state, mulberry32(1))).toBe("b");
-	});
-
-	it("returns undefined when every tree is maxed", () => {
-		const state = stateWith(["a", { species: "bonsai", tokens: 1_000_000 }]);
-		expect(pickRecipient(state, mulberry32(1))).toBeUndefined();
-	});
-
-	it("returns undefined for an empty grove", () => {
-		expect(pickRecipient({ trees: {} }, mulberry32(1))).toBeUndefined();
-	});
-});
-
 describe("applyTokenBatch", () => {
-	it("routes the whole batch to the active tree", () => {
-		const state = { ...stateWith(["a", { species: "bonsai", tokens: 0 }], ["b", { species: "oak", tokens: 0 }]), activeTreeId: "a" };
-		const result = applyTokenBatch(state, 1_000, mulberry32(1));
-		expect(result.state.trees["a"]?.tokens).toBe(1_000);
+	it("feeds the active tree until full, then spills into the next tree", () => {
+		const state = { ...stateWith(["a", { species: "bonsai", tokens: 900_000 }], ["b", { species: "bonsai", tokens: 0 }]), activeTreeId: "a" };
+		const result = applyTokenBatch(state, 1_200_000);
+		// a drinks its last 100k, b gets clamped at full, the last 100k withers.
+		expect(result.state.trees["a"]?.tokens).toBe(1_000_000);
+		expect(result.state.trees["b"]?.tokens).toBe(1_000_000);
+		expect(result.changedTreeIds).toEqual(["a", "b"]);
+	});
+
+	it("starts with the first planted tree when nothing is active", () => {
+		const state = stateWith(["a", { species: "bonsai", tokens: 0 }], ["b", { species: "oak", tokens: 0 }]);
+		const result = applyTokenBatch(state, 500);
+		expect(result.state.trees["a"]?.tokens).toBe(500);
 		expect(result.state.trees["b"]?.tokens).toBe(0);
 		expect(result.changedTreeIds).toEqual(["a"]);
 	});
 
-	it("routes to a random non-maxed tree when no tree is active", () => {
-		const state = stateWith(["a", { species: "bonsai", tokens: 0 }], ["b", { species: "oak", tokens: 0 }]);
-		const result = applyTokenBatch(state, 1_000, mulberry32(1));
-		const fed = result.changedTreeIds[0];
-		expect(result.state.trees[fed]?.tokens).toBe(1_000);
-		expect(result.changedTreeIds).toHaveLength(1);
+	it("keeps the active tree first even when it sits later in insertion order", () => {
+		const state = { ...stateWith(["a", { species: "oak", tokens: 0 }], ["b", { species: "bonsai", tokens: 0 }]), activeTreeId: "b" };
+		const result = applyTokenBatch(state, 400);
+		expect(result.state.trees["b"]?.tokens).toBe(400);
+		expect(result.state.trees["a"]?.tokens).toBe(0);
+		expect(result.changedTreeIds).toEqual(["b"]);
 	});
 
-	it("clamps a tree at its species cost and discards the excess", () => {
-		const state = stateWith(["a", { species: "bonsai", tokens: 999_500 }]);
-		const result = applyTokenBatch(state, 10_000, mulberry32(1));
-		expect(result.state.trees["a"]?.tokens).toBe(1_000_000);
+	it("spills across several trees in insertion order until the batch runs out", () => {
+		const state = stateWith(["a", { species: "custom", tokens: 0 }], ["b", { species: "custom", tokens: 0 }], ["c", { species: "custom", tokens: 0 }]);
+		const result = applyTokenBatch(state, 250_000);
+		expect(result.state.trees["a"]?.tokens).toBe(200_000);
+		expect(result.state.trees["b"]?.tokens).toBe(50_000);
+		expect(result.state.trees["c"]?.tokens).toBe(0);
+		expect(result.changedTreeIds).toEqual(["a", "b"]);
 	});
 
-	it("discards the batch when every tree is maxed", () => {
+	it("skips already-maxed trees in the flow", () => {
+		const state = { ...stateWith(["a", { species: "bonsai", tokens: 1_000_000 }], ["b", { species: "custom", tokens: 0 }]), activeTreeId: "a" };
+		const result = applyTokenBatch(state, 1_000);
+		expect(result.state.trees["b"]?.tokens).toBe(1_000);
+		expect(result.changedTreeIds).toEqual(["b"]);
+	});
+
+	it("wastes the excess when every tree is maxed", () => {
 		const state = stateWith(["a", { species: "bonsai", tokens: 1_000_000 }]);
-		const result = applyTokenBatch(state, 10_000, mulberry32(1));
+		const result = applyTokenBatch(state, 10_000);
 		expect(result.state).toEqual(state);
 		expect(result.changedTreeIds).toEqual([]);
 	});
 
 	it("ignores zero and negative batches", () => {
 		const state = stateWith(["a", { species: "bonsai", tokens: 100 }]);
-		expect(applyTokenBatch(state, 0, mulberry32(1)).state).toEqual(state);
+		expect(applyTokenBatch(state, 0).state).toEqual(state);
 	});
 });
 

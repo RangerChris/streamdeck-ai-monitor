@@ -107,7 +107,7 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 		// Test feeds arrive as strings ("5000"), and garbage text stays NaN → ignored.
 		const testBatch = Math.floor(Number(settings.testBatch ?? NaN));
 		if (Number.isFinite(testBatch) && testBatch > 0) {
-			const applied = applyTokenBatch(state, testBatch, mulberry32((Date.now() ^ 0x1e3779b9) >>> 0));
+			const applied = applyTokenBatch(state, testBatch);
 			state = applied.state;
 			tree = state.trees[action.id];
 			repaint = true;
@@ -168,15 +168,13 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 		let dirty = false;
 		const changed = new Set<string>();
 		const now = new Date();
-		// Per-batch seed; only the fallback recipient pick and replant seeds consume it.
-		const rng = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
 
 		// Claude: local files only; the first scan is just a baseline.
 		try {
 			const usage = await scanClaudeUsage(join(homedir(), ".claude"), now);
 			const { delta, feed } = claudeTokensDelta(state.claudeFeed, usage.tokensToday, now);
 			if (delta > 0) {
-				const applied = applyTokenBatch(state, delta, rng);
+				const applied = applyTokenBatch(state, delta);
 				state = applied.state;
 				applied.changedTreeIds.forEach((id) => changed.add(id));
 			}
@@ -195,7 +193,7 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 				const usage = await getUsage(apiKey);
 				const { delta, buckets } = ollamaTokensDelta(state.ollamaFeed?.buckets, usage);
 				if (delta > 0) {
-					const applied = applyTokenBatch(state, delta, rng);
+					const applied = applyTokenBatch(state, delta);
 					state = applied.state;
 					applied.changedTreeIds.forEach((id) => changed.add(id));
 					dirty = true;

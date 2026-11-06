@@ -57,7 +57,11 @@ export function ollamaTokensDelta(seen: Record<string, number> | undefined, resp
 	for (const bucket of response.buckets) {
 		const tokens = bucketTokens(bucket);
 		buckets[bucket.from] = tokens;
-		delta += Math.max(0, tokens - (seen?.[bucket.from] ?? 0));
+		// First poll is a baseline only: tokens already on the books are spent
+		// history, not growth, and dumping them in would grow a tree for free.
+		if (seen !== undefined) {
+			delta += Math.max(0, tokens - (seen[bucket.from] ?? 0));
+		}
 	}
 	return { delta, buckets };
 }
