@@ -4,9 +4,20 @@
 	"id": "com.elleby.runcommands.ollama.infobar",
 	"items": [
 		{
+			"key": "next",
+			"type": "bar",
+			"rect": [0, 0, 232, 3],
+			"value": 0,
+			"bar_bg_c": "#3d444d",
+			"bar_fill_c": "#58a6ff",
+			"border_w": 0,
+			"subtype": 0,
+			"zOrder": 1
+		},
+		{
 			"key": "sLabel",
 			"type": "text",
-			"rect": [4, 1, 64, 16],
+			"rect": [4, 6, 64, 14],
 			"value": "SESS",
 			"font": { "size": 12, "weight": 700 },
 			"alignment": "center"
@@ -14,7 +25,7 @@
 		{
 			"key": "session",
 			"type": "bar",
-			"rect": [72, 3, 152, 14],
+			"rect": [72, 7, 152, 12],
 			"value": 0,
 			"bar_bg_c": "#262626",
 			"bar_fill_c": "#2ea043",
@@ -25,7 +36,7 @@
 		{
 			"key": "wLabel",
 			"type": "text",
-			"rect": [4, 19, 64, 16],
+			"rect": [4, 21, 64, 14],
 			"value": "WEEK",
 			"font": { "size": 12, "weight": 700 },
 			"alignment": "center"
@@ -33,7 +44,7 @@
 		{
 			"key": "weekly",
 			"type": "bar",
-			"rect": [72, 21, 152, 14],
+			"rect": [72, 22, 152, 12],
 			"value": 0,
 			"bar_bg_c": "#262626",
 			"bar_fill_c": "#2ea043",

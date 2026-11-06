@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { balanceToFeedback, resetIn, roundPercent } from "../src/actions/ollama-infobar";
+import { balanceToFeedback, nextLinePercent, resetIn, roundPercent } from "../src/actions/ollama-infobar";
 import { OllamaBalance } from "../src/actions/ollama-api";
 
 describe("roundPercent", () => {
@@ -8,6 +8,27 @@ describe("roundPercent", () => {
 		expect(roundPercent(5.67)).toBe(5.7);
 		expect(roundPercent(13.93)).toBe(13.9);
 		expect(roundPercent(0.04)).toBe(0);
+	});
+});
+
+describe("nextLinePercent", () => {
+	const period = 60_000;
+
+	it("is full at schedule time and halfway mid-period", () => {
+		const now = Date.now();
+		expect(nextLinePercent(now + period, now, period)).toBe(100);
+		expect(nextLinePercent(now + period / 2, now, period)).toBe(50);
+	});
+
+	it("never goes negative or above full", () => {
+		const now = Date.now();
+		expect(nextLinePercent(now - 5_000, now, period)).toBe(0);
+		expect(nextLinePercent(now + period * 2, now, period)).toBe(100);
+	});
+
+	it("keeps a fractional precision for a smooth shrink", () => {
+		const now = 1_000_000;
+		expect(nextLinePercent(now + 1_000, now, 60_000)).toBe(1.7);
 	});
 });
 

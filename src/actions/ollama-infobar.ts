@@ -7,8 +7,23 @@ import { gaugeColor } from "./usage-gauge";
 /** Timer cadence; the shared store keeps all Ollama keys at one API request per minute. */
 const pollMs = 60_000;
 
+/** Redraw cadence of the next-update countdown line, for a smooth shrink. */
+const lineTickMs = 250;
+
 /** Settings are not needed for the info bar. */
 type InfobarSettings = Record<string, never>;
+
+/**
+ * The countdown line's value: full when the update is due, shrinking to 0 as
+ * the poll approaches, clamped to 0..100 with a tenth's precision.
+ * @param nextUpdateAt When the next update is due, epoch ms.
+ * @param now The current time, epoch ms.
+ * @param periodMs Countdown period, ms.
+ */
+export function nextLinePercent(nextUpdateAt: number, now: number, periodMs: number): number {
+	const fraction = (nextUpdateAt - now) / periodMs;
+	return Math.round(Math.max(0, Math.min(1, fraction)) * 1000) / 10;
+}
 
 /**
  * Shows Ollama session and weekly usage as two live progress bars on the Stream Deck Neo info bar.
@@ -19,9 +34,13 @@ export class OllamaInfobar extends SingletonAction<InfobarSettings> {
 	override readonly manifestId = "com.segment7.aimonitor.ollama.infobar";
 
 	private timer: ReturnType<typeof setInterval> | undefined;
+	private lineTimer: ReturnType<typeof setInterval> | undefined;
+
+	/** When the next fresh reading is due; 0 means the countdown is idle. */
+	private nextUpdateAt = 0;
 
 	/**
-	 * Assigns the layout, refreshes, and arms the poll timer.
+	 * Assigns the layout, refreshes, and arms the poll and countdown timers.
 	 */
 	override onWillAppear(ev: WillAppearEvent<InfobarSettings>): void {
 		if (!ev.action.isNeoInfobar()) {
@@ -32,37 +51,52 @@ export class OllamaInfobar extends SingletonAction<InfobarSettings> {
 		void bar.setFeedbackLayout("layouts/ollama-infobar.json");
 		void this.refresh(bar);
 		clearInterval(this.timer);
+		clearInterval(this.lineTimer);
 		this.timer = setInterval(() => void this.refresh(bar), pollMs);
+		this.lineTimer = setInterval(() => {
+			if (this.nextUpdateAt === 0) {
+				return;
+			}
+			void bar.setFeedback({ next: nextLinePercent(this.nextUpdateAt, Date.now(), pollMs) });
+		}, lineTickMs);
 	}
 
 	/**
-	 * Tears down the poll timer.
+	 * Tears down the poll and countdown timers.
 	 */
 	override onWillDisappear(_ev: WillDisappearEvent<InfobarSettings>): void {
 		clearInterval(this.timer);
+		clearInterval(this.lineTimer);
 		this.timer = undefined;
+		this.lineTimer = undefined;
+		this.nextUpdateAt = 0;
 	}
 
 	/**
-	 * Fetches the balance and pushes both bars.
+	 * Fetches the balance, pushes both bars, and restarts the countdown line on
+	 * fresh data. A "keep" reading holds the bars and lets the line shrink to 0
+	 * until real data arrives.
 	 * @param bar The infobar action to update.
 	 */
 	private async refresh(bar: NeoInfobarAction<InfobarSettings>): Promise<void> {
 		const reading = await balanceStore.get();
 
 		if (reading.status === "nokey") {
-			await bar.setFeedback({ sLabel: "no key", wLabel: "OLLAMA_API_KEY" });
+			this.nextUpdateAt = 0;
+			await bar.setFeedback({ sLabel: "no key", wLabel: "OLLAMA_API_KEY", next: 100 });
 			return;
 		}
 		if (reading.status === "badkey") {
-			await bar.setFeedback({ sLabel: "bad key", wLabel: "ollama.com/settings/keys" });
+			this.nextUpdateAt = 0;
+			await bar.setFeedback({ sLabel: "bad key", wLabel: "ollama.com/settings/keys", next: 100 });
 			return;
 		}
 		if (reading.status === "keep") {
-			return; // Backing off from a 429 or a transient error — the last bars stay on screen.
+			return; // Backing off from a 429 or a transient error — the last bars and the shrinking line stay on screen.
 		}
 
-		await bar.setFeedback(balanceToFeedback(reading.balance));
+		this.nextUpdateAt = Date.now() + pollMs;
+		await bar.setFeedback({ ...balanceToFeedback(reading.balance), next: 100 });
 	}
 }
 
