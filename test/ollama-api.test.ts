@@ -95,7 +95,8 @@ describe("getBalance", () => {
 			kind: "percent",
 			sessionPercent: 75,
 			weeklyPercent: 40,
-			resetsAt: "2026-10-27T00:00:00Z",
+			sessionResetsAt: "2026-10-25T14:00:00Z",
+			weeklyResetsAt: "2026-10-27T00:00:00Z",
 		});
 	});
 

@@ -20,7 +20,7 @@ export class OllamaApiError extends Error {
 /** Normalized balance, covering the two documented response shapes. */
 export type OllamaBalance =
 	| { kind: "usd"; balanceUsd: number; allowanceUsd: number; purchasedUsd: number; resetsAt?: string }
-	| { kind: "percent"; sessionPercent: number; weeklyPercent: number; resetsAt?: string };
+	| { kind: "percent"; sessionPercent: number; weeklyPercent: number; sessionResetsAt?: string; weeklyResetsAt?: string };
 
 /**
  * Fetches JSON from the Ollama API with bearer auth.
@@ -64,7 +64,8 @@ export async function getBalance(apiKey: string): Promise<OllamaBalance> {
 		kind: "percent",
 		sessionPercent: Number(included.session?.remaining_percent ?? 0),
 		weeklyPercent: Number(included.weekly?.remaining_percent ?? 0),
-		resetsAt: typeof included.weekly?.resets_at === "string" ? included.weekly.resets_at : undefined,
+		sessionResetsAt: typeof included.session?.resets_at === "string" ? included.session.resets_at : undefined,
+		weeklyResetsAt: typeof included.weekly?.resets_at === "string" ? included.weekly.resets_at : undefined,
 	};
 }
 /** Model metadata is effectively immutable in practice, so /api/show answers are cached forever. */

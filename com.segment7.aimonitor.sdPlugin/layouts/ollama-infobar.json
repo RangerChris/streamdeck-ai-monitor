@@ -6,7 +6,7 @@
 		{
 			"key": "sLabel",
 			"type": "text",
-			"rect": [4, 4, 64, 18],
+			"rect": [4, 1, 64, 16],
 			"value": "SESS",
 			"font": { "size": 12, "weight": 700 },
 			"alignment": "center"
@@ -14,7 +14,7 @@
 		{
 			"key": "session",
 			"type": "bar",
-			"rect": [72, 6, 156, 14],
+			"rect": [72, 3, 152, 14],
 			"value": 0,
 			"bar_bg_c": "#262626",
 			"bar_fill_c": "#2ea043",
@@ -25,7 +25,7 @@
 		{
 			"key": "wLabel",
 			"type": "text",
-			"rect": [4, 28, 64, 18],
+			"rect": [4, 19, 64, 16],
 			"value": "WEEK",
 			"font": { "size": 12, "weight": 700 },
 			"alignment": "center"
@@ -33,13 +33,21 @@
 		{
 			"key": "weekly",
 			"type": "bar",
-			"rect": [72, 30, 156, 14],
+			"rect": [72, 21, 152, 14],
 			"value": 0,
 			"bar_bg_c": "#262626",
 			"bar_fill_c": "#2ea043",
 			"border_w": 1,
 			"subtype": 0,
 			"zOrder": 1
+		},
+		{
+			"key": "reset",
+			"type": "text",
+			"rect": [0, 36, 232, 14],
+			"value": "",
+			"font": { "size": 14, "weight": 700 },
+			"alignment": "center"
 		}
 	]
 }

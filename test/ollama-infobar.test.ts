@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { balanceToFeedback, roundPercent } from "../src/actions/ollama-infobar";
+import { balanceToFeedback, resetIn, roundPercent } from "../src/actions/ollama-infobar";
 import { OllamaBalance } from "../src/actions/ollama-api";
 
 describe("roundPercent", () => {
@@ -11,21 +11,50 @@ describe("roundPercent", () => {
 	});
 });
 
+describe("resetIn", () => {
+	const now = Date.UTC(2026, 10, 6, 12, 0);
+
+	it("formats days plus hours, hours plus minutes, then bare minutes", () => {
+		expect(resetIn("2026-11-09T14:00:00Z", now)).toBe("3d 2h");
+		expect(resetIn("2026-11-06T15:30:00Z", now)).toBe("3h 30m");
+		expect(resetIn("2026-11-06T12:45:00Z", now)).toBe("45m");
+	});
+
+	it("returns empty for missing, past, or unparseable timestamps", () => {
+		expect(resetIn(undefined, now)).toBe("");
+		expect(resetIn("banana", now)).toBe("");
+		expect(resetIn("2026-11-05T00:00:00Z", now)).toBe("");
+	});
+});
+
 describe("balanceToFeedback", () => {
-	it("maps session and weekly usage to bars and labels", () => {
+	it("maps session and weekly usage to bars, labels, and both reset countdowns", () => {
 		const balance: OllamaBalance = {
 			kind: "percent",
 			sessionPercent: 86.07,
 			weeklyPercent: 94.33,
-			resetsAt: "2026-10-25T11:00:00Z",
+			sessionResetsAt: "2026-10-25T19:00:00Z",
+			weeklyResetsAt: "2026-10-28T11:00:00Z",
 		};
+		const now = Date.UTC(2026, 9, 25, 8, 0);
 
-		expect(balanceToFeedback(balance)).toEqual({
+		expect(balanceToFeedback(balance, now)).toEqual({
 			sLabel: "SESS 13.9%",
 			session: { bar_fill_c: "#2ea043", value: 13.9 },
 			wLabel: "WKS 5.7%",
 			weekly: { bar_fill_c: "#2ea043", value: 5.7 },
+			reset: "session in 11h · weekly in 3d 3h",
 		});
+	});
+
+	it("joins only the windows it knows reset times for", () => {
+		const balance: OllamaBalance = { kind: "percent", sessionPercent: 50, weeklyPercent: 40, sessionResetsAt: "2026-10-25T12:15:00Z" };
+		expect(balanceToFeedback(balance, Date.UTC(2026, 9, 25, 8, 0)).reset).toBe("session in 4h 15m");
+
+		const weeklyOnly: OllamaBalance = { kind: "percent", sessionPercent: 50, weeklyPercent: 40, weeklyResetsAt: "2026-10-28T00:00:00Z" };
+		expect(balanceToFeedback(weeklyOnly, Date.UTC(2026, 9, 25, 8, 0)).reset).toBe("weekly in 2d 16h");
+
+		expect(balanceToFeedback({ kind: "percent", sessionPercent: 50, weeklyPercent: 40 }).reset).toBe("");
 	});
 
 	it("colors the bars by usage thresholds", () => {
@@ -35,6 +64,7 @@ describe("balanceToFeedback", () => {
 		const amberFeedback = balanceToFeedback(amber);
 		expect(amberFeedback.session).toMatchObject({ value: 61, bar_fill_c: "#e6b45a" });
 		expect(amberFeedback.weekly).toMatchObject({ value: 80, bar_fill_c: "#e6b45a" });
+		expect(amberFeedback.reset).toBe("");
 
 		const redFeedback = balanceToFeedback(red);
 		expect(redFeedback.session).toMatchObject({ value: 90, bar_fill_c: "#d0342c" });
@@ -48,6 +78,12 @@ describe("balanceToFeedback", () => {
 			session: { bar_fill_c: "#e6b45a", value: 80 },
 			wLabel: "WKS $20.00",
 			weekly: { bar_fill_c: "#e6b45a", value: 80 },
+			reset: "",
 		});
+	});
+
+	it("counts down the allowance period on credit-balance plans", () => {
+		const balance: OllamaBalance = { kind: "usd", balanceUsd: 20, allowanceUsd: 100, purchasedUsd: 0, resetsAt: "2026-10-27T00:00:00Z" };
+		expect(balanceToFeedback(balance, Date.UTC(2026, 9, 26, 10, 0)).reset).toBe("resets in 14h");
 	});
 });
