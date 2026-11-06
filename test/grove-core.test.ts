@@ -26,22 +26,22 @@ function stateWith(...entries: Array<[string, { species: GroveState["trees"][str
 }
 
 describe("SPECIES catalog", () => {
-	it("has week-scale costs — a session burns ~250k, a Pro week allows ~24M", () => {
-		expect(SPECIES.bonsai.costTokens).toBe(1_000_000);
-		expect(SPECIES.cherry.costTokens).toBe(5_000_000);
-		expect(SPECIES.birch.costTokens).toBe(10_000_000);
-		expect(SPECIES.oak.costTokens).toBe(20_000_000);
-		expect(SPECIES.redwood.costTokens).toBe(25_000_000);
-		expect(SPECIES.custom.costTokens).toBe(200_000); // sensible default for the custom profile
+	it("has day-scale costs — agent sessions churn ~20M a day, a heavy week ~100M", () => {
+		expect(SPECIES.bonsai.costTokens).toBe(10_000_000);
+		expect(SPECIES.cherry.costTokens).toBe(50_000_000);
+		expect(SPECIES.birch.costTokens).toBe(100_000_000);
+		expect(SPECIES.oak.costTokens).toBe(200_000_000);
+		expect(SPECIES.redwood.costTokens).toBe(250_000_000);
+		expect(SPECIES.custom.costTokens).toBe(2_000_000); // sensible default for the custom profile
 	});
 });
 
 describe("growthFraction", () => {
 	it("is 0 for a fresh seed and clamps at 1 when full grown", () => {
 		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 0, plantedAt: now })).toBe(0);
-		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 500_000, plantedAt: now })).toBe(0.5);
-		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 1_000_000, plantedAt: now })).toBe(1);
-		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 2_000_000, plantedAt: now })).toBe(1);
+		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 5_000_000, plantedAt: now })).toBe(0.5);
+		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 10_000_000, plantedAt: now })).toBe(1);
+		expect(growthFraction({ species: "bonsai", seed: 1, tokens: 20_000_000, plantedAt: now })).toBe(1);
 	});
 
 	it("uses the custom palette's cost", () => {
@@ -77,11 +77,11 @@ describe("claudeTokensDelta", () => {
 
 describe("applyTokenBatch", () => {
 	it("feeds the active tree until full, then spills into the next tree", () => {
-		const state = { ...stateWith(["a", { species: "bonsai", tokens: 900_000 }], ["b", { species: "bonsai", tokens: 0 }]), activeTreeId: "a" };
+		const state = { ...stateWith(["a", { species: "bonsai", tokens: 9_000_000 }], ["b", { species: "bonsai", tokens: 0 }]), activeTreeId: "a" };
 		const result = applyTokenBatch(state, 1_200_000);
-		// a drinks its last 100k, b gets clamped at full, the last 100k withers.
-		expect(result.state.trees["a"]?.tokens).toBe(1_000_000);
-		expect(result.state.trees["b"]?.tokens).toBe(1_000_000);
+		// a drinks its last 1M, b gets the remaining 200k, nothing maxes out.
+		expect(result.state.trees["a"]?.tokens).toBe(10_000_000);
+		expect(result.state.trees["b"]?.tokens).toBe(200_000);
 		expect(result.changedTreeIds).toEqual(["a", "b"]);
 	});
 
@@ -103,22 +103,22 @@ describe("applyTokenBatch", () => {
 
 	it("spills across several trees in insertion order until the batch runs out", () => {
 		const state = stateWith(["a", { species: "custom", tokens: 0 }], ["b", { species: "custom", tokens: 0 }], ["c", { species: "custom", tokens: 0 }]);
-		const result = applyTokenBatch(state, 250_000);
-		expect(result.state.trees["a"]?.tokens).toBe(200_000);
-		expect(result.state.trees["b"]?.tokens).toBe(50_000);
+		const result = applyTokenBatch(state, 2_500_000);
+		expect(result.state.trees["a"]?.tokens).toBe(2_000_000);
+		expect(result.state.trees["b"]?.tokens).toBe(500_000);
 		expect(result.state.trees["c"]?.tokens).toBe(0);
 		expect(result.changedTreeIds).toEqual(["a", "b"]);
 	});
 
 	it("skips already-maxed trees in the flow", () => {
-		const state = { ...stateWith(["a", { species: "bonsai", tokens: 1_000_000 }], ["b", { species: "custom", tokens: 0 }]), activeTreeId: "a" };
+		const state = { ...stateWith(["a", { species: "bonsai", tokens: 10_000_000 }], ["b", { species: "custom", tokens: 0 }]), activeTreeId: "a" };
 		const result = applyTokenBatch(state, 1_000);
 		expect(result.state.trees["b"]?.tokens).toBe(1_000);
 		expect(result.changedTreeIds).toEqual(["b"]);
 	});
 
 	it("wastes the excess when every tree is maxed", () => {
-		const state = stateWith(["a", { species: "bonsai", tokens: 1_000_000 }]);
+		const state = stateWith(["a", { species: "bonsai", tokens: 10_000_000 }]);
 		const result = applyTokenBatch(state, 10_000);
 		expect(result.state).toEqual(state);
 		expect(result.changedTreeIds).toEqual([]);
@@ -281,8 +281,8 @@ describe("customPalette", () => {
 	});
 
 	it("falls back to the custom default cost for tiny or garbage values", () => {
-		expect(customPalette({ customCost: "0" }).costTokens).toBe(200_000);
-		expect(customPalette({ customCost: "banana" }).costTokens).toBe(200_000);
+		expect(customPalette({ customCost: "0" }).costTokens).toBe(2_000_000);
+		expect(customPalette({ customCost: "banana" }).costTokens).toBe(2_000_000);
 	});
 
 	it("keeps the accent only when it is a real hex color", () => {

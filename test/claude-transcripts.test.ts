@@ -34,6 +34,32 @@ describe("sumUsage", () => {
 
 		expect(sumUsage(content)).toEqual({ inputTokens: 300, outputTokens: 300, sessions: 2 });
 	});
+
+	it("counts a replayed assistant message once via its message id", () => {
+		const line = (msgId: string, inTokens: number): string =>
+			JSON.stringify({
+				type: "assistant",
+				timestamp: "2026-10-25T08:00:00.000Z",
+				sessionId: "s1",
+				message: { id: msgId, model: "m", usage: { input_tokens: inTokens, output_tokens: 5 } },
+			});
+
+		// Stream hiccups leave the same API response written twice, 4ms apart, under different record uuids.
+		const content = [line("msg_a", 489), line("msg_a", 489), line("msg_b", 155)].join("\n");
+		expect(sumUsage(content)).toEqual({ inputTokens: 644, outputTokens: 10, sessions: 1 });
+	});
+
+	it("counts assistant records without a message id individually", () => {
+		const line = (inTokens: number): string =>
+			JSON.stringify({
+				type: "assistant",
+				timestamp: "2026-10-25T08:00:00.000Z",
+				sessionId: "s1",
+				message: { model: "m", usage: { input_tokens: inTokens, output_tokens: 0 } },
+			});
+		const content = [line(100), line(200), line(300)].join("\n");
+		expect(sumUsage(content)).toEqual({ inputTokens: 600, outputTokens: 0, sessions: 1 });
+	});
 });
 
 describe("scanClaudeUsage", () => {

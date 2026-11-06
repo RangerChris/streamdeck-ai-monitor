@@ -45,12 +45,12 @@ export type TreeSpecies = {
 	palette: TreePalette;
 };
 
-/** The fixed catalog. Costs are epic scale: a Redwood is a genuine achievement. */
+/** The fixed catalog. Costs are epic scale: agent days churn ~20M, so a Redwood is a genuine achievement. */
 export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	bonsai: {
 		id: "bonsai",
 		name: "Bonsai",
-		costTokens: 1_000_000,
+		costTokens: 10_000_000,
 		heightRatio: 0.45,
 		branchFactor: [2, 3, 2, 2],
 		maxDepth: 4,
@@ -64,7 +64,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	cherry: {
 		id: "cherry",
 		name: "Cherry",
-		costTokens: 5_000_000,
+		costTokens: 50_000_000,
 		heightRatio: 0.72,
 		branchFactor: [2, 3, 3, 2],
 		maxDepth: 4,
@@ -77,7 +77,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	birch: {
 		id: "birch",
 		name: "Birch",
-		costTokens: 10_000_000,
+		costTokens: 100_000_000,
 		heightRatio: 0.78,
 		branchFactor: [2, 2, 3, 2],
 		maxDepth: 4,
@@ -90,7 +90,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	oak: {
 		id: "oak",
 		name: "Oak",
-		costTokens: 20_000_000,
+		costTokens: 200_000_000,
 		heightRatio: 0.78,
 		branchFactor: [2, 3, 3, 2],
 		maxDepth: 4,
@@ -103,7 +103,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	redwood: {
 		id: "redwood",
 		name: "Redwood",
-		costTokens: 25_000_000,
+		costTokens: 250_000_000,
 		heightRatio: 0.82,
 		branchFactor: [2, 2, 2, 3],
 		maxDepth: 5,
@@ -118,7 +118,7 @@ export const SPECIES: Readonly<Record<SpeciesId, TreeSpecies>> = {
 	custom: {
 		id: "custom",
 		name: "Custom",
-		costTokens: 200_000,
+		costTokens: 2_000_000,
 		heightRatio: 0.75,
 		branchFactor: [2, 3, 2, 2],
 		maxDepth: 4,

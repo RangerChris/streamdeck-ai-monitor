@@ -144,8 +144,8 @@ describe("treeSvg determinism", () => {
 describe("treeSvg growth", () => {
 	it("draws more branches the closer the tree is to full growth", () => {
 		const lines = (svg: string) => (svg.match(/<line/g) ?? []).length;
-		const young = lines(treeSvg(SPECIES.oak, 42, 100_000));
-		const mature = lines(treeSvg(SPECIES.oak, 42, 3_000_000));
+		const young = lines(treeSvg(SPECIES.oak, 42, 1_000_000));
+		const mature = lines(treeSvg(SPECIES.oak, 42, 100_000_000));
 		const fullGrown = lines(full(SPECIES.oak, 42));
 		expect(mature).toBeGreaterThan(young);
 		expect(fullGrown).toBeGreaterThan(mature);

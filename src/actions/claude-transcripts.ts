@@ -29,6 +29,8 @@ const weekMs = 7 * 24 * 60 * 60 * 1000;
 export function sumUsage(content: string, sinceMs?: number): UsageSum {
 	const totals = { inputTokens: 0, outputTokens: 0 };
 	const sessionIds = new Set<string>();
+	/** One API response per id; stream hiccups can write the same response twice. */
+	const seenMessages = new Set<string>();
 
 	for (const line of content.split(/\r?\n/)) {
 		if (line.trim() === "") {
@@ -39,6 +41,13 @@ export function sumUsage(content: string, sinceMs?: number): UsageSum {
 			const usage = record.type === "assistant" ? record.message?.usage : undefined;
 			if (usage === undefined) {
 				continue;
+			}
+			const messageId = typeof record.message?.id === "string" ? record.message.id : undefined;
+			if (messageId !== undefined) {
+				if (seenMessages.has(messageId)) {
+					continue; // Replayed response — already counted under its first write.
+				}
+				seenMessages.add(messageId);
 			}
 			if (sinceMs !== undefined && !(typeof record.timestamp === "string")) {
 				continue;
@@ -116,7 +125,7 @@ export async function latestTranscript(claudeDir: string): Promise<string | unde
  * @param dir Directory to scan.
  * @returns Full paths of every *.jsonl file, excluding anything under a "subagents" directory.
  */
-async function listTranscripts(dir: string): Promise<string[]> {
+export async function listTranscripts(dir: string): Promise<string[]> {
 	const files: string[] = [];
 	let entries;
 	if (dir.endsWith("subagents")) {
