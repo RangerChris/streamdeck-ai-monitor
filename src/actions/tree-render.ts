@@ -57,6 +57,61 @@ const appearWindow = 0.15;
 const fitTopY = 10;
 const fitSideX = 5;
 
+/** Full-scale crown lean at force 1, in px; equals the fit margin, so force 1 never clips. Beyond that it's a gale. */
+const windMaxLean = fitSideX;
+
+/** From this force leaves start peeling off the crown (slider 50 of 100). */
+export const leafBlowForce = 1.0;
+
+/** How a tree leans at one moment: force 0..1, phase the sway cycle position in radians. */
+export type Wind = { force: number; phase: number };
+
+/** Discrete frames per sway cycle; one shared clock keeps every key in phase. */
+export const windSteps = 24;
+
+/**
+ * The sway cycle position for a quantized tick index.
+ * @param ticks Ticks since the epoch, e.g. `Math.floor(Date.now() / windFrameMs)`.
+ * @returns Phase in radians, 0..2PI exclusive.
+ */
+export function windPhase(ticks: number): number {
+	return ((ticks % windSteps) / windSteps) * 2 * Math.PI;
+}
+
+/**
+ * A tree's own spot in the sway cycle: its seed picks a fixed offset, so a grove
+ * of trees sways and sheds leaves out of step with each other.
+ * @param seed The tree's shape seed.
+ * @param ticks Ticks since the epoch.
+ * @returns Phase in radians, 0..2PI exclusive.
+ */
+export function windPhaseFor(seed: number, ticks: number): number {
+	return windPhase(ticks + (seed % windSteps));
+}
+
+/**
+ * Horizontal sway in px for a point at height y under the current wind. Zero at
+ * the soil line so trunks stay planted, growing toward the crown.
+ * @param y The point's height in SVG coordinates.
+ * @param wind Current wind.
+ */
+export function swayPx(y: number, wind: Wind): number {
+	if (wind.force <= 0) {
+		return 0;
+	}
+	const height = Math.min(1, Math.max(0, (groundY - y) / (groundY - fitTopY)));
+	const gust = 0.75 + 0.25 * Math.sin(wind.phase * 0.31 + 1.3);
+	return wind.force * windMaxLean * gust * Math.sin(wind.phase) * height;
+}
+
+/** Cache of fitted skeletons — structure() spends the whole RNG budget per call, frames reuse them. */
+const structureCache = new Map<string, Branch[]>();
+
+/** Keeps the memo bounded; two custom trees can share seed and species but not palettes. */
+function structureCacheKey(species: TreeSpecies, seed: number): string {
+	return `${species.id}|${seed}|${species.costTokens}|${species.palette.trunk}|${species.palette.canopy.join(",")}|${species.palette.accent ?? ""}`;
+}
+
 /**
  * Uniformly scales a skeleton about the planting point so the mature crown
  * (tips and canopy blobs) stays inside the frame margins. Angles and shape
@@ -388,6 +443,12 @@ function weeperCanopy(branches: Branch[], bearers: Branch[], tips: Tip[], specie
  * so the draw pass stays a pure function of the skeleton plus growth.
  */
 function structure(species: TreeSpecies, seed: number): Branch[] {
+	const cacheKey = structureCacheKey(species, seed);
+	const cached = structureCache.get(cacheKey);
+	if (cached !== undefined) {
+		return cached;
+	}
+
 	const rng = mulberry32(seed);
 	const branches: Branch[] = [];
 
@@ -439,7 +500,12 @@ function structure(species: TreeSpecies, seed: number): Branch[] {
 	};
 	grow(root, 1);
 	attachCanopy(branches, species, rng);
-	return fitToKey(branches);
+	const fitted = fitToKey(branches);
+	if (structureCache.size >= 64) {
+		structureCache.delete(structureCache.keys().next().value as string);
+	}
+	structureCache.set(cacheKey, fitted);
+	return fitted;
 }
 
 /**
@@ -447,12 +513,20 @@ function structure(species: TreeSpecies, seed: number): Branch[] {
  * @param species Resolved species profile.
  * @param seed The tree's shape seed; same seed, same silhouette.
  * @param tokens Tokens the tree has received so far.
- * @param options Pass `active: true` to add the selection glow.
+ * @param options Pass `active: true` to add the selection glow, `wind` to lean the crown side-to-side,
+ *   or `leaves` (progress along the sway cycle plus a gust counter) to send canopy leaves flying once the wind nears gale strength.
  * @returns A full-frame SVG string.
  */
-export function treeSvg(species: TreeSpecies, seed: number, tokens: number, options?: { active?: boolean }): string {
+export function treeSvg(species: TreeSpecies, seed: number, tokens: number, options?: { active?: boolean; wind?: Wind; leaves?: { progress: number; gust: number } }): string {
 	const growth = Math.min(1, tokens / species.costTokens);
 	const skeleton = structure(species, seed);
+	const wind = options?.wind;
+	const windOn = wind !== undefined && wind.force > 0;
+	const sway = (y: number): number => (windOn ? swayPx(y, wind) : 0);
+	const leaves = options?.leaves;
+	const leavesBlow = windOn && leaves !== undefined && wind.force >= leafBlowForce && growth > 0;
+	/** Canopy blobs as they sit this frame — the detachment points for blown leaves. */
+	const leafSources: { x: number; y: number; r: number; color: string }[] = [];
 
 	// Square-root easing: the sprout leaves the ground fast, then the tree matures slowly.
 	const t = Math.sqrt(growth);
@@ -470,28 +544,55 @@ export function treeSvg(species: TreeSpecies, seed: number, tokens: number, opti
 		const x1 = branch.x0 + Math.cos(branch.angle) * length;
 		const y1 = branch.y0 + Math.sin(branch.angle) * length;
 		const width = Math.max(1.2, branch.thickness * (0.4 + 0.6 * t));
-		branchParts.push(`<line x1="${branch.x0.toFixed(2)}" y1="${branch.y0.toFixed(2)}" x2="${x1.toFixed(2)}" y2="${y1.toFixed(2)}" stroke="${species.palette.trunk}" stroke-width="${width.toFixed(2)}" stroke-linecap="round"/>`);
+		branchParts.push(`<line x1="${(branch.x0 + sway(branch.y0)).toFixed(2)}" y1="${branch.y0.toFixed(2)}" x2="${(x1 + sway(y1)).toFixed(2)}" y2="${y1.toFixed(2)}" stroke="${species.palette.trunk}" stroke-width="${width.toFixed(2)}" stroke-linecap="round"/>`);
 		branchLines++;
 
 		// Canopy fills out as the branch matures; blob scale follows the branch's own progress.
 		const blobAppear = smoothstep((t - branch.birth) / (appearWindow + 0.1));
 		if (blobAppear > 0) {
 			for (const blob of branch.blobs) {
-				massParts.push(`<circle cx="${(x1 + blob.dx * appear).toFixed(2)}" cy="${(y1 + blob.dy * appear).toFixed(2)}" r="${(blob.r * blobAppear).toFixed(2)}" fill="${blob.color}"/>`);
+				const cy = y1 + blob.dy * appear;
+				const cx = x1 + blob.dx * appear + sway(cy);
+				massParts.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(blob.r * blobAppear).toFixed(2)}" fill="${blob.color}"/>`);
+				if (leavesBlow) {
+					leafSources.push({ x: cx, y: cy, r: blob.r * blobAppear, color: blob.color });
+				}
 			}
 			for (const dab of branch.dabs) {
-				dabParts.push(`<circle cx="${(x1 + dab.dx * appear).toFixed(2)}" cy="${(y1 + dab.dy * appear).toFixed(2)}" r="${(dab.r * blobAppear).toFixed(2)}" fill="${dab.color}"/>`);
+				const cy = y1 + dab.dy * appear;
+				dabParts.push(`<circle cx="${(x1 + dab.dx * appear + sway(cy)).toFixed(2)}" cy="${cy.toFixed(2)}" r="${(dab.r * blobAppear).toFixed(2)}" fill="${dab.color}"/>`);
 			}
 		}
 	}
 	// Layering: branches under the foliage mass, light dabs over the whole mass.
 	const parts = [...branchParts, ...massParts, ...dabParts];
 
+	if (leaves !== undefined && leavesBlow && leafSources.length > 0) {
+		// One departure per leaf, staggered over the sway cycle. No fade: the frame
+		// edge does the vanishing. Wind pace sets how fast the trip goes.
+		// Every gust sheds its own size of litter, picked from the tree itself,
+		// so cycles differ and two trees never match.
+		const light = species.palette.canopy[species.palette.canopy.length - 1];
+		const litter = 1 + (leaves.gust + seed) % 4;
+		const picked = leafSources.filter((_, i) => i % 5 === 0).slice(0, litter);
+		for (const [i, leaf] of picked.entries()) {
+			const p = Math.min(1, Math.max(0, leaves.progress - i * 0.05));
+			if (p <= 0 || p >= 1) {
+				continue;
+			}
+			// Travel overshoots the off-frame horizon at x=150 by 25%, so every leaf
+			// visibly crosses the frame edge well before the cycle wraps around.
+			const x = leaf.x + wind.force * (150 - leaf.x) * 1.25 * p;
+			const y = leaf.y + (26 - 8 * wind.force) * p * p;
+			parts.push(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${Math.max(4, leaf.r * 0.5).toFixed(2)}" fill="${light}" fill-opacity="1"/>`);
+		}
+	}
+
 	if (t === 0) {
 		// Fresh seed: a little stem and its first leaves.
-		parts.push(`<line x1="${centerX}" y1="${groundY}" x2="${centerX}" y2="${groundY - 7}" stroke="${species.palette.trunk}" stroke-width="2.5" stroke-linecap="round"/>`);
-		parts.push(`<circle cx="${centerX - 3.5}" cy="${groundY - 9}" r="3" fill="${species.palette.canopy[0]}"/>`);
-		parts.push(`<circle cx="${centerX + 3.5}" cy="${groundY - 6}" r="3" fill="${species.palette.canopy[species.palette.canopy.length - 1]}"/>`);
+		parts.push(`<line x1="${centerX}" y1="${groundY}" x2="${(centerX + sway(groundY - 7)).toFixed(2)}" y2="${groundY - 7}" stroke="${species.palette.trunk}" stroke-width="2.5" stroke-linecap="round"/>`);
+		parts.push(`<circle cx="${(centerX - 3.5 + sway(groundY - 9)).toFixed(2)}" cy="${groundY - 9}" r="3" fill="${species.palette.canopy[0]}"/>`);
+		parts.push(`<circle cx="${(centerX + 3.5 + sway(groundY - 6)).toFixed(2)}" cy="${groundY - 6}" r="3" fill="${species.palette.canopy[species.palette.canopy.length - 1]}"/>`);
 	}
 
 	const ground = `<ellipse cx="${centerX}" cy="${groundY + 3}" rx="26" ry="4" fill="#1e1a16"/>`;
@@ -529,10 +630,10 @@ export function soilSvg(species?: TreeSpecies): string {
  * @param species Resolved species profile.
  * @param seed The tree's shape seed.
  * @param tokens Tokens received so far.
- * @param options `count` frame count, defaults to 9.
+ * @param options `count` frame count, defaults to 9; `wind` to match the tree's current sway.
  * @returns One full-frame SVG string per step; the last frame is the plain tree.
  */
-export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: number, options?: { count?: number }): string[] {
+export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: number, options?: { count?: number; wind?: Wind }): string[] {
 	const count = options?.count ?? 9;
 	const badge = `${compactTokens(tokens)} / ${compactTokens(species.costTokens)}`;
 	const width = badge.length * 10 + 20;
@@ -543,7 +644,7 @@ export function tokenBadgeFrames(species: TreeSpecies, seed: number, tokens: num
 			`<text x="72" y="20.5" font-family="monospace" font-size="17" fill="#ffffff" fill-opacity="${opacity.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeXml(badge)}</text>`,
 		].join("");
 		// Draw the plain tree, then the badge over it — appending keeps the badge above the background rect.
-		const tree = treeSvg(species, seed, tokens);
+		const tree = treeSvg(species, seed, tokens, { wind: options?.wind });
 		return tree.replace("</svg>", `${badgeSvg}</svg>`);
 	});
 }

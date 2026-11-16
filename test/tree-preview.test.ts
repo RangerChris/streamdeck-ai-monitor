@@ -32,7 +32,14 @@ describe.skipIf(process.env.PREVIEW_TREES === undefined)("tree contact sheet", (
 				})
 				.join("");
 			const soil = `<div class="row"><div class="label">empty</div>${cell(soilSvg(species)).repeat(growthTokens.length)}</div>`;
-			return `<section><h2>${species.name} — ${species.costTokens.toLocaleString()} tokens</h2>${rows}${soil}</section>`;
+			const phases = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI];
+			const windRows = [0.3, 0.7, 1]
+				.map((force) => {
+					const cells = phases.map((phase) => treeSvg(species, 42, species.costTokens, { wind: { force, phase } })).map(cell).join("");
+					return `<div class="row"><div class="label">wind ${force}</div>${cells}</div>`;
+				})
+				.join("");
+			return `<section><h2>${species.name} — ${species.costTokens.toLocaleString()} tokens</h2>${rows}${soil}${windRows}</section>`;
 		}).join("");
 
 		const html = `<!doctype html><html><head><title>Tree preview</title><style>

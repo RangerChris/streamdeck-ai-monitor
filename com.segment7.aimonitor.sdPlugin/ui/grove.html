@@ -36,9 +36,12 @@
 		<sdpi-item label="Test tokens">
 			<sdpi-textfield setting="testBatch" placeholder="off"></sdpi-textfield>
 		</sdpi-item>
+		<sdpi-item label="Wind force">
+			<sdpi-range setting="windForce" min="0" max="100" step="5" showlabels></sdpi-range>
+		</sdpi-item>
 		<sdpi-item label="Notes">
 			<p style="font-size: 10px; margin-top: 8px">
-				Press the key to mark it as the grower. With <b>Test tokens</b> set, a press also adds that many tokens. Colors and <b>Custom max tokens</b> apply to <b>Custom</b>.
+				Press the key to mark it as the grower. With <b>Test tokens</b> set, a press also adds that many tokens. Colors and <b>Custom max tokens</b> apply to <b>Custom</b>. <b>Wind force</b> sways the tree from the side (0 is still air; defaults to a light breeze). Holding the key 5 seconds replants it from scratch.
 			</p>
 		</sdpi-item>
 	</body>

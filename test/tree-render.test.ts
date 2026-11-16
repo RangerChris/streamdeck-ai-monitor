@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SPECIES, type TreeSpecies } from "../src/actions/grove-core";
-import { mixHex, soilSvg, tokenBadgeFrames, treeSvg } from "../src/actions/tree-render";
+import { leafBlowForce, mixHex, soilSvg, swayPx, tokenBadgeFrames, treeSvg, windPhaseFor, windPhase, windSteps } from "../src/actions/tree-render";
 
 /** Renders with all branches out, the easiest regime to assert against. */
 const full = (species: TreeSpecies, seed: number) => treeSvg(species, seed, species.costTokens);
@@ -198,6 +198,195 @@ describe("soilSvg", () => {
 		const svg = soilSvg();
 		expect(svg).toContain('width="144"');
 		expect(svg).toContain('fill="#141414"');
+	});
+});
+
+describe("treeSvg wind", () => {
+	it("is byte-identical when the wind is still", () => {
+		const still = treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens);
+		expect(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 0, phase: 2.2 } })).toEqual(still);
+	});
+
+	it("renders the same bytes for the same phase twice", () => {
+		const left = treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 0.8, phase: 1.1 } });
+		expect(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 0.8, phase: 1.1 } })).toEqual(left);
+	});
+
+	it("sways downwind on both sides across phases", () => {
+		const still = crownExtent(full(SPECIES.oak, 42));
+		const right = crownExtent(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 1, phase: 1.57 } }));
+		const left = crownExtent(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 1, phase: 4.71 } }));
+		expect(right.x1, "right gust pushes the crown past its still reach").toBeGreaterThan(still.x1);
+		expect(left.x0, "left gust pulls the crown past its still reach").toBeLessThan(still.x0);
+	});
+
+	it("keeps the trunk base planted at full force", () => {
+		const base = (svg: string) => svg.match(/x1="72\.00" y1="138\.00"/)?.[0];
+		const still = base(full(SPECIES.oak, 42));
+		expect(base(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 1, phase: 1.57 } }))).toEqual(still);
+		expect(still).toBeDefined();
+	});
+
+	it("scales the lean with force", () => {
+		const at = (force: number) => crownExtent(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force, phase: 1.57 } }));
+		const soft = at(0.25);
+		const strong = at(1);
+		const still = at(0);
+		expect(Math.abs(strong.x1 - still.x1)).toBeGreaterThan(Math.abs(soft.x1 - still.x1));
+		expect(soft.x1).toBeGreaterThan(still.x1);
+	});
+
+	it("never clips the frame at full force, any species, any seed", () => {
+		for (const species of [SPECIES.bonsai, SPECIES.cherry, SPECIES.birch, SPECIES.oak, SPECIES.redwood]) {
+			for (let seed = 1; seed <= 12; seed++) {
+				const svg = treeSvg(species, seed, species.costTokens, { wind: { force: 1, phase: 1.57 } });
+				const reach = xReach(svg);
+				expect(reach.max, `${species.id} seed ${seed} blown out the right`).toBeLessThanOrEqual(144);
+				expect(reach.min, `${species.id} seed ${seed} blown out the left`).toBeGreaterThanOrEqual(0);
+			}
+		}
+	});
+
+	it("sways the sprout too", () => {
+		const still = treeSvg(SPECIES.oak, 42, 0);
+		const gusty = treeSvg(SPECIES.oak, 42, 0, { wind: { force: 1, phase: 1.57 } });
+		expect(gusty).not.toEqual(still);
+		// The stem's base always stays planted; only its top leans.
+		expect(still).toMatch(/<line x1="72" y1="138"/);
+		expect(gusty).toMatch(/<line x1="72" y1="138"/);
+		expect(gusty).not.toMatch(/<line x1="72" y1="138" x2="72"/);
+	});
+});
+
+describe("treeSvg blown leaves", () => {
+	const leaves = (progress: number, gust = 0) => ({ progress, gust });
+	const withLeaves = (species: TreeSpecies, seed: number, progress: number, force = 1, gust = 0) =>
+		treeSvg(species, seed, species.costTokens, { wind: { force, phase: 1.57 }, leaves: leaves(progress, gust) });
+	/** Count of in-flight leaf circles. */
+	const flyingCount = (svg: string): number => (svg.match(/fill-opacity="/g) ?? []).length;
+
+	it(`only sheds leaves at ${leafBlowForce} force (slider 50 of 100)`, () => {
+		const below = withLeaves(SPECIES.oak, 42, 0.3, leafBlowForce - 0.05);
+		const at = withLeaves(SPECIES.oak, 42, 0.3, leafBlowForce);
+		const plain = treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: leafBlowForce - 0.05, phase: 1.57 } });
+		expect(below).toEqual(plain);
+		expect(at).not.toEqual(below);
+	});
+
+	/** Positions of the in-flight leaf circles: cx, cy, r, opacity. */
+	const flying = (svg: string): { x: number; y: number; r: number; o: number }[] =>
+		[...svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)" fill="#[^"]+" fill-opacity="([\d.]+)"/g)]
+			.map((m) => ({ x: Number(m[1]), y: Number(m[2]), r: Number(m[3]), o: Number(m[4]) }));
+
+	it("adds fading leaves in flight, up to four", () => {
+		const plain = treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 1, phase: 1.57 } });
+		const blowy = withLeaves(SPECIES.oak, 42, 0.25);
+		expect(blowy).not.toEqual(plain);
+		const extras = (blowy.match(/fill-opacity="[\d.]+"/g) ?? []).length;
+		expect(extras).toBeGreaterThanOrEqual(1);
+		expect(extras).toBeLessThanOrEqual(4);
+	});
+
+	it("drives the leaves downwind and toward the ground as progress grows", () => {
+		const early = flying(withLeaves(SPECIES.oak, 42, 0.15));
+		const late = flying(withLeaves(SPECIES.oak, 42, 0.85));
+		expect(Math.max(...late.map((l) => l.x))).toBeGreaterThan(Math.max(...early.map((l) => l.x)));
+		expect(Math.max(...late.map((l) => l.y))).toBeGreaterThan(Math.max(...early.map((l) => l.y)));
+	});
+
+	it("sheds a different number of leaves from gust to gust", () => {
+		// Mid-cycle every shed leaf is in flight, so the frame count is the gust count.
+		const counts = [0, 1, 2, 3, 4, 5].map((gust) => flyingCount(withLeaves(SPECIES.oak, 42, 0.5, 1, gust)));
+		expect(counts.every((c) => c >= 1 && c <= 4)).toBe(true);
+		expect(new Set(counts).size).toBeGreaterThan(1);
+	});
+
+	it("keeps blown leaves chunky and unfaded the whole trip", () => {
+		const flyingLeaves = flying(withLeaves(SPECIES.oak, 42, 0.3, 1));
+		expect(flyingLeaves.length).toBeGreaterThanOrEqual(1);
+		for (const leaf of flyingLeaves) {
+			expect(leaf.r, "leaf dot too small to see").toBeGreaterThanOrEqual(4);
+			expect(leaf.o, "leaf faded mid-flight — the edge should do the vanishing").toBe(1);
+		}
+	});
+
+	it("carries every leaf out of the frame by the last tick of the cycle", () => {
+		// Ticks land on n/24; the worst case is the most staggered leaf on the
+		// final tick. Its travel must already be past the frame edge.
+		const lastTick = 23 / 24;
+		expect(Math.min(...flying(withLeaves(SPECIES.oak, 42, lastTick, 1)).map((l) => l.x))).toBeGreaterThan(144);
+	});
+
+	it("hard wind throws them sideways, light wind lets them drop", () => {
+		const soft = Math.max(...flying(withLeaves(SPECIES.oak, 42, 0.5, 1)).map((l) => l.x - l.y));
+		const hard = Math.max(...flying(withLeaves(SPECIES.oak, 42, 0.5, 2)).map((l) => l.x - l.y));
+		expect(hard).toBeGreaterThan(soft);
+	});
+
+	it("sheds the same leaves for the same progress", () => {
+		expect(withLeaves(SPECIES.oak, 42, 0.25)).toEqual(withLeaves(SPECIES.oak, 42, 0.25));
+	});
+
+	it("spares the sprout — nothing to blow off", () => {
+		const gustySprout = treeSvg(SPECIES.oak, 42, 0, { wind: { force: 2, phase: 1.57 }, leaves: leaves(0.25) });
+		expect(gustySprout).toEqual(treeSvg(SPECIES.oak, 42, 0, { wind: { force: 2, phase: 1.57 } }));
+	});
+
+	it("lets still air keep the leaves on the tree", () => {
+		const still = treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens);
+		expect(treeSvg(SPECIES.oak, 42, SPECIES.oak.costTokens, { wind: { force: 0, phase: 1 }, leaves: leaves(0.25) })).toEqual(still);
+	});
+});
+
+describe("swayPx", () => {
+	const wind = { force: 1, phase: 1.57 };
+
+	it("returns zero in still air and at the ground line", () => {
+		expect(swayPx(60, { force: 0, phase: 1.57 })).toBe(0);
+		expect(swayPx(138, wind)).toBe(0);
+	});
+
+	it("is bounded by force * windMaxLean and grows with height", () => {
+		expect(Math.abs(swayPx(20, wind))).toBeLessThanOrEqual(5);
+		expect(Math.abs(swayPx(20, wind))).toBeGreaterThan(Math.abs(swayPx(90, wind)));
+		expect(swayPx(20, wind)).toBeGreaterThan(0);
+	});
+
+	it("leans twice as far at gale force 2", () => {
+		expect(Math.abs(swayPx(20, { force: 2, phase: 1.57 }))).toBeGreaterThan(Math.abs(swayPx(20, { force: 1, phase: 1.57 })));
+	});
+
+	it("cycles through windSteps discrete phases", () => {
+		expect(windSteps).toBe(24);
+		expect(windPhase(0)).toBe(0);
+		expect(windPhase(windSteps)).toBe(0);
+		expect(windPhase(6)).toBeCloseTo(Math.PI / 2, 5);
+	});
+});
+
+describe("windPhaseFor", () => {
+	it("offsets each tree by its seed", () => {
+		expect(windPhaseFor(1, 5)).toBe(windPhase(6));
+		expect(windPhaseFor(31, 0)).toBe(windPhase(31 % windSteps));
+	});
+
+	it("puts different trees in different spots of the cycle", () => {
+		const spots = new Set([3, 7, 11, 17, 23].map((seed) => windPhaseFor(seed, 0)));
+		expect(spots.size).toBe(5);
+		// And one tree holds its own spot forever.
+		expect(windPhaseFor(7, 0)).toBe(windPhaseFor(7, windSteps));
+	});
+});
+
+describe("treeSvg structure memo", () => {
+	it("gives two same-seed customs with different palettes their own colors", () => {
+		const a: TreeSpecies = { ...SPECIES.custom, costTokens: 10_000, palette: { trunk: "#123456", canopy: ["#654321"] } };
+		const b: TreeSpecies = { ...SPECIES.custom, costTokens: 10_000, palette: { trunk: "#f0e0d0", canopy: ["#654321"] } };
+		const svgA = full(a, 9); // warms the memo with a's palette
+		const svgB = full(b, 9);
+		expect(svgA).toContain("#123456");
+		expect(svgB).toContain("#f0e0d0");
+		expect(svgB).not.toContain("#123456");
 	});
 });
 

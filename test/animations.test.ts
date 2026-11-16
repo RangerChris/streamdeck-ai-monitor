@@ -113,4 +113,20 @@ describe("createKeyAnimator", () => {
 
 		expect(images).toEqual([]);
 	});
+
+	it("reports whether an animation is playing", () => {
+		const { animator } = collecting();
+
+		expect(animator.isPlaying()).toBe(false);
+
+		animator.play(["a", "b"], { fps: 10 });
+		expect(animator.isPlaying()).toBe(true);
+
+		vi.advanceTimersByTime(300);
+		expect(animator.isPlaying()).toBe(false);
+
+		animator.play(["a", "b"], { fps: 10, loop: true });
+		animator.stop();
+		expect(animator.isPlaying()).toBe(false);
+	});
 });

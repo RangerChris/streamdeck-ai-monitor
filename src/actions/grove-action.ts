@@ -1,4 +1,4 @@
-import streamDeck, { KeyAction, KeyDownEvent, DidReceiveSettingsEvent } from "@elgato/streamdeck";
+import streamDeck, { DidReceiveSettingsEvent, KeyAction, KeyDownEvent, KeyUpEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -9,7 +9,7 @@ import { OllamaApiError } from "./ollama-api";
 import { createKeyAnimator, KeyAnimator } from "./key-animator";
 import { PollingAction } from "./polling-action";
 import { mulberry32 } from "./seeded-rng";
-import { soilSvg, tokenBadgeFrames, treeSvg } from "./tree-render";
+import { soilSvg, tokenBadgeFrames, treeSvg, windPhaseFor, windSteps, type Wind } from "./tree-render";
 import {
 	applyTokenBatch,
 	claudeTokensDelta,
@@ -21,6 +21,7 @@ import {
 	SPECIES,
 	type CustomPalette,
 	type GroveState,
+	type GroveTree,
 } from "./grove-core";
 
 /**
@@ -45,10 +46,26 @@ type GroveKeySettings = {
 	resetOnPress?: boolean;
 	/** Tokens per manual press, for testing growth without real spend; unset disables it. */
 	testBatch?: number;
+	/** Wind strength from the inspector slider, 0-100; unset keeps a gentle default breeze. */
+	windForce?: number;
 };
 
 /** Milliseconds between feed scans; file reads plus one usage API call. */
 const feedPollMs = 60_000;
+
+/** Milliseconds between wind frames; 5 fps with 24 phases gives a 4.8 s sway cycle. */
+const windFrameMs = 200;
+
+/** Hold duration after which a press becomes a replant instead. */
+const longPressMs = 5_000;
+
+/** Breeze strength, shown on the 0-100 slider, when the inspector never touched it. */
+const defaultWindForce = 12.5;
+
+/** Slider 0-100 to render force: the crown leans force/2 * windMaxLean; 100 is a full gale. */
+function windForceOf(settings: GroveKeySettings): number {
+	return Math.min(2, Math.max(0, ((settings.windForce ?? defaultWindForce) * 2) / 100));
+}
 
 export class GroveAction extends PollingAction<GroveKeySettings> {
 	/** Identifies the action in the manifest — plain field instead of the @action decorator (vitest can't transform decorators). */
@@ -67,15 +84,53 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 	/** When the Ollama usage API may be hit again per the shared rate budget. */
 	private nextUsageAt = 0;
 
+	/** Wind force per key, 0..1, cached from settings here so wind frames skip the websocket. */
+	private readonly windForces = new Map<string, number>();
+
+	/** Last image pushed per key; identical frames are dropped so a still key stays silent. */
+	private readonly lastImage = new Map<string, string>();
+
+	/** Each planted key's tree as of its last full paint, so wind frames need no settings roundtrips. */
+	private readonly treeViews = new Map<string, { tree: GroveTree; active: boolean }>();
+
+	/** One shared sway loop for all keys, armed only while any key has wind. */
+	private windTimer?: ReturnType<typeof setInterval>;
+
+	/** Armed while a planted key is held; firing means a long-press, so the release becomes a no-op. */
+	private readonly holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 	protected override async refresh(action: KeyAction<GroveKeySettings>): Promise<void> {
 		await this.feed();
 		await this.repaintAll();
 	}
 
 	/**
-	 * Pressing marks the key's tree as the token recipient and flashes its total.
-	 * When the inspector's test feed is set, each press also pushes that many
-	 * tokens into the woods so growth can be tried without spending any.
+	 * Arms the shared sway loop; it stops itself on its first tick when nothing blows.
+	 */
+	override onWillAppear(ev: WillAppearEvent<GroveKeySettings>): void {
+		super.onWillAppear(ev);
+		this.ensureWindTimer();
+	}
+
+	/**
+	 * Forgets a key's caches. The shared wind timer disarms itself on the next tick.
+	 */
+	override onWillDisappear(ev: WillDisappearEvent<GroveKeySettings>): void {
+		const hold = this.holdTimers.get(ev.action.id);
+		if (hold !== undefined) {
+			clearTimeout(hold);
+			this.holdTimers.delete(ev.action.id);
+		}
+		this.windForces.delete(ev.action.id);
+		this.lastImage.delete(ev.action.id);
+		this.treeViews.delete(ev.action.id);
+		super.onWillDisappear(ev);
+	}
+
+	/**
+	 * A press decides on release: a quick press grows and flashes, a 5 s hold
+	 * replants instead. Keying the decision to the hold keeps the press from
+	 * applying twice.
 	 */
 	override async onKeyDown(ev: KeyDownEvent<GroveKeySettings>): Promise<void> {
 		const action = ev.action.isKey() ? ev.action : undefined;
@@ -83,13 +138,47 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 			return;
 		}
 
+		const state = await this.loadGrove();
+		if (state.trees[action.id] === undefined) {
+			return; // Nothing planted yet — the soil art already says "plant me", and a hold has nothing to erase.
+		}
+		this.holdTimers.set(action.id, setTimeout(() => {
+			this.holdTimers.delete(action.id);
+			void this.completeLongPress(action).catch(() => {});
+		}, longPressMs));
+	}
+
+	/**
+	 * The release of a short press grows the tree and flashes its total.
+	 * A release after the hold fired (long press) is silent — the replant already ran.
+	 */
+	override async onKeyUp(ev: KeyUpEvent<GroveKeySettings>): Promise<void> {
+		const action = ev.action.isKey() ? ev.action : undefined;
+		if (action === undefined) {
+			return;
+		}
+		const hold = this.holdTimers.get(action.id);
+		if (hold === undefined) {
+			return;
+		}
+		clearTimeout(hold);
+		this.holdTimers.delete(action.id);
+		await this.press(action);
+	}
+
+	/**
+	 * The short press marks the key's tree as the token recipient and flashes its total.
+	 * When the inspector's test feed is set, each press also pushes that many tokens
+	 * into the woods so growth can be tried without spending any.
+	 */
+	private async press(action: KeyAction<GroveKeySettings>): Promise<void> {
 		// No feed scan here: pressing spams the shared 10 req/min Ollama budget,
 		// and the 1 min poll keeps the badge numbers fresh enough.
 		const settings = await action.getSettings();
 		let state = await this.loadGrove();
 		let tree = state.trees[action.id];
 		if (tree === undefined) {
-			return; // Nothing planted yet — the soil art already says "plant me".
+			return;
 		}
 
 		let repaint = state.activeTreeId !== action.id;
@@ -127,6 +216,28 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 	}
 
 	/**
+	 * Finishes a 5 s hold: the tree starts over — fresh random shape at sprout
+	 * growth, species and custom look untouched. No press behavior runs.
+	 */
+	private async completeLongPress(action: KeyAction<GroveKeySettings>): Promise<void> {
+		// Same rng idiom as the inspector's one-shot reset; the seed must differ run to run.
+		const reset = resetTree(await this.loadGrove(), action.id, "replant", Date.now(), mulberry32((Date.now() ^ 0x85ebca6b) >>> 0));
+		if (!reset.changed) {
+			return;
+		}
+		await this.saveGrove(reset.state);
+		await this.repaintAll();
+
+		const tree = reset.state.trees[action.id];
+		if (tree !== undefined) {
+			await this.animator(action).play(
+				tokenBadgeFrames(resolveSpecies(tree), tree.seed, tree.tokens).map(svgDataUri),
+				{ fps: 3 },
+			);
+		}
+	}
+
+	/**
 	 * The inspector drives planting: picking a species plants a tree, switching
 	 * species replants, and clearing the selection digs it back up.
 	 */
@@ -142,7 +253,51 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 		if (synced.changed) {
 			await this.saveGrove(synced.state);
 		}
+		// A fresh slider value may have armed (or silenced) the sway loop.
+		this.ensureWindTimer();
 		await this.repaintAll();
+	}
+
+	/** Arms the shared sway loop; the tick stops it again when nothing blows. */
+	private ensureWindTimer(): void {
+		if (this.windTimer === undefined) {
+			this.windTimer = setInterval(() => void this.windTick().catch(() => {}), windFrameMs);
+		}
+	}
+
+	/**
+	 * One wind frame: repaint every visible key with a breeze from its cached
+	 * snapshot, skipping keys whose badge flash is playing. An unset force still
+	 * counts — the default breeze — so the tick never kills itself before paint
+	 * has filled the force cache.
+	 */
+	private async windTick(): Promise<void> {
+		const windy = [...this.actions].filter((a) => a.isKey() && this.windForces.get(a.id) !== 0 && !this.animators.get(a.id)?.isPlaying());
+		if (windy.length === 0) {
+			clearInterval(this.windTimer);
+			this.windTimer = undefined;
+			return;
+		}
+		const ticks = Math.floor(Date.now() / windFrameMs);
+		const gust = Math.floor(ticks / windSteps);
+		await Promise.all(
+			windy.map(async (a) => {
+				if (!a.isKey()) {
+					return;
+				}
+				// A key not painted yet has no snapshot (and default-breeze force); skip until its first paint lands.
+				const view = this.treeViews.get(a.id);
+				if (view === undefined) {
+					return;
+				}
+				const { tree, active } = view;
+				const force = this.windForces.get(a.id) ?? 0;
+				const phase = windPhaseFor(tree.seed, ticks);
+				const wind: Wind = { force, phase };
+				const image = svgDataUri(treeSvg(resolveSpecies(tree), tree.seed, tree.tokens, { active, wind, leaves: { progress: phase / (2 * Math.PI), gust } }));
+				await this.pushImage(a, image);
+			}),
+		);
 	}
 
 	/**
@@ -222,18 +377,39 @@ export class GroveAction extends PollingAction<GroveKeySettings> {
 	}
 
 	/**
-	 * Draws a key's tree, or soil if nothing is planted.
+	 * Draws a key's tree, or soil if nothing is planted, and refreshes the key's
+	 * wind force and tree snapshot for the wind loop. A key whose frame is
+	 * unchanged is not re-sent.
 	 * @param action The key to draw.
 	 */
 	private async paint(action: KeyAction<GroveKeySettings>): Promise<void> {
+		const settings = await action.getSettings();
 		const state = await this.loadGrove();
 		const tree = state.trees[action.id];
 		if (tree === undefined) {
-			const settings = await action.getSettings();
-			await action.setImage(svgDataUri(soilSvg(settings.species !== undefined && settings.species in SPECIES ? SPECIES[settings.species as keyof typeof SPECIES] : undefined)));
+			this.windForces.set(action.id, 0); // Soil never sways.
+			this.treeViews.delete(action.id);
+			const soil = settings.species !== undefined && settings.species in SPECIES ? SPECIES[settings.species as keyof typeof SPECIES] : undefined;
+			await this.pushImage(action, svgDataUri(soilSvg(soil)));
 			return;
 		}
-		await action.setImage(svgDataUri(treeSvg(resolveSpecies(tree), tree.seed, tree.tokens, { active: state.activeTreeId === action.id })));
+
+		const force = windForceOf(settings);
+		this.windForces.set(action.id, force);
+		this.treeViews.set(action.id, { tree, active: state.activeTreeId === action.id });
+		// Each tree sways on its own slice of the cycle, seed-picked, out of step with the rest.
+		const phase = windPhaseFor(tree.seed, Math.floor(Date.now() / windFrameMs));
+		const wind: Wind | undefined = force > 0 ? { force, phase } : undefined;
+		await this.pushImage(action, svgDataUri(treeSvg(resolveSpecies(tree), tree.seed, tree.tokens, { active: state.activeTreeId === action.id, wind, leaves: { progress: phase / (2 * Math.PI), gust: Math.floor(Date.now() / windFrameMs / windSteps) } })));
+	}
+
+	/** Sends an image only when it differs from the last one actually shown. */
+	private async pushImage(action: KeyAction<GroveKeySettings>, image: string): Promise<void> {
+		if (this.lastImage.get(action.id) === image) {
+			return;
+		}
+		this.lastImage.set(action.id, image);
+		await action.setImage(image);
 	}
 
 	/**

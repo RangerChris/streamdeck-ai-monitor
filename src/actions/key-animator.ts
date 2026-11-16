@@ -18,6 +18,9 @@ export type KeyAnimator = {
 
 	/** Stops the current animation and restores the key's idle (manifest) image. */
 	stop(): void;
+
+	/** Whether a frame sequence is currently playing on this key. */
+	isPlaying(): boolean;
 };
 
 /**
@@ -27,6 +30,7 @@ export type KeyAnimator = {
  */
 export function createKeyAnimator(setImage: (image?: string) => void | Promise<void>): KeyAnimator {
 	let timer: ReturnType<typeof setInterval> | undefined;
+	let playing = false;
 
 	const stop = (): void => {
 		if (timer === undefined) {
@@ -34,6 +38,7 @@ export function createKeyAnimator(setImage: (image?: string) => void | Promise<v
 		}
 		clearInterval(timer);
 		timer = undefined;
+		playing = false;
 		void setImage();
 	};
 
@@ -43,6 +48,7 @@ export function createKeyAnimator(setImage: (image?: string) => void | Promise<v
 			return;
 		}
 		clearInterval(timer);
+		playing = true;
 		void setImage(frames[0]);
 
 		const fps = options?.fps ?? 12;
@@ -57,5 +63,5 @@ export function createKeyAnimator(setImage: (image?: string) => void | Promise<v
 		}, 1000 / fps);
 	};
 
-	return { play, stop };
+	return { play, stop, isPlaying: () => playing };
 }
